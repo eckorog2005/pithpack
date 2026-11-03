@@ -569,3 +569,82 @@ fn strip_removes_free_comments_and_keeps_doc_comments_in_javascript() {
 
     insta::assert_snapshot!(files(&out.stdout));
 }
+
+const HTML: &str = "\
+<!DOCTYPE html>
+<!-- A free header comment. -->
+<html>
+<head>
+  <title>A <!-- literal --> title</title>
+  <!--[if IE]><link rel=\"stylesheet\" href=\"ie.css\"><![endif]-->
+  <style>
+    /* style comments are CSS, left as is */
+    p { color: red; }
+  </style>
+  <script>
+    // script comments are JavaScript, left as is
+    const s = \"<!-- not a comment -->\";
+  </script>
+</head>
+<body>
+  <!--[if !IE]><!--><p>Not IE</p><!--<![endif]-->
+  <p title=\"<!-- not a comment -->\">foo<!-- inline -->bar</p>
+  <img alt='<!-- not a comment -->' />
+  <textarea><!-- literal text --></textarea>
+  <!--
+    A multi-line comment.
+  -->
+</body>
+</html>
+";
+
+#[test]
+fn strip_removes_html_comments_and_leaves_script_and_style_untouched() {
+    let dir = fixture(&[("index.html", HTML)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-tree", "--report", "none", "index.html"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+}
+
+const CSS: &str = "\
+/* A free header comment. */
+@import url(\"//example.com/a.css\");
+
+/**
+ * Not a Doc Comment: CSS has none.
+ */
+.card {
+  color: red; /* trailing note */
+  content: \"/* not a comment */\";
+  background: url(http://example.com/x.png);
+  margin:/*glued*/0;
+}
+";
+
+#[test]
+fn strip_removes_every_css_comment_even_without_docs() {
+    let dir = fixture(&[("site.css", CSS)]);
+
+    let docs = run(
+        dir.path(),
+        &["-0", "--no-tree", "--report", "none", "site.css"],
+    );
+    let no_docs = run(
+        dir.path(),
+        &[
+            "-0",
+            "--no-docs",
+            "--no-tree",
+            "--report",
+            "none",
+            "site.css",
+        ],
+    );
+
+    assert_eq!(docs.stdout, no_docs.stdout);
+    insta::assert_snapshot!(files(&docs.stdout));
+}

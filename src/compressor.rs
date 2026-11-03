@@ -53,6 +53,21 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
     let mut stack = vec![(tree.root_node(), false)];
     while let Some((node, in_error)) = stack.pop() {
         if matches!(node.kind(), "line_comment" | "block_comment" | "comment") {
+            // tree-sitter-html lexes `<!--` inside tags and RCDATA elements too, where it is text.
+            if std::iter::successors(node.parent(), Node::parent).any(|ancestor| {
+                matches!(ancestor.kind(), "start_tag" | "self_closing_tag")
+                    || (ancestor.kind() == "element"
+                        && ancestor
+                            .child(0)
+                            .and_then(|tag| tag.named_child(0))
+                            .is_some_and(|name| {
+                                let name = &source[name.byte_range()];
+                                name.eq_ignore_ascii_case("textarea")
+                                    || name.eq_ignore_ascii_case("title")
+                            }))
+            }) {
+                continue;
+            }
             let doc = node.child_by_field_name("doc").is_some()
                 || match lang {
                     Some(Language::Go) => is_go_doc(source, node),
@@ -73,7 +88,16 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
                                 .all(|child| child.kind() == "comment")
                     })
                     .unwrap_or(node);
-                edits.push(removal(source, target.byte_range()));
+                let (range, glue) = removal(source, target.byte_range());
+                // An HTML comment never sits inside a tag, so a space would only change the text.
+                edits.push((
+                    range,
+                    if lang == Some(Language::Html) {
+                        ""
+                    } else {
+                        glue
+                    },
+                ));
             }
             continue;
         }
