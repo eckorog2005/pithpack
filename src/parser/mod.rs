@@ -6,6 +6,7 @@ pub use language::{Language, detect, lang_name};
 pub fn parse(lang: Language, source: &str) -> Option<tree_sitter::Tree> {
     let grammar: tree_sitter::Language = match lang {
         Language::Rust => tree_sitter_rust::LANGUAGE.into(),
+        Language::Python => tree_sitter_python::LANGUAGE.into(),
         _ => return None,
     };
     // shortcut: a fresh Parser per file; keep one per thread when #54 parallelises.

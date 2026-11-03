@@ -1,0 +1,26 @@
+---
+source: tests/strip.rs
+assertion_line: 294
+expression: files(&out.stdout)
+---
+<file path="app.py" lang="python" mode="strip" tokens="67">
+import os
+
+class Point:
+
+    x = 1
+
+    def total(self):
+        s = "# not a comment"
+        note = """not a docstring"""
+        return self.x
+
+def only_docs():
+    ...
+
+def nested():
+    if True:
+        """An if body has no docstring."""
+        return 1
+</file>
+</bundle>

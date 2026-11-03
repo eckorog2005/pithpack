@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use tree_sitter::Node;
+
 use crate::cli::ModeArg;
 use crate::parser::{self, Language};
 
@@ -50,14 +52,16 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
     let mut error_bytes = 0;
     let mut stack = vec![(tree.root_node(), false)];
     while let Some((node, in_error)) = stack.pop() {
-        if matches!(node.kind(), "line_comment" | "block_comment") {
+        if matches!(node.kind(), "line_comment" | "block_comment" | "comment") {
             if !docs || node.child_by_field_name("doc").is_none() {
                 edits.push(removal(source, node.byte_range()));
             }
             continue;
         }
-        if matches!(node.kind(), "string_literal" | "raw_string_literal")
-            && source[node.byte_range()].contains('\n')
+        if matches!(
+            node.kind(),
+            "string_literal" | "raw_string_literal" | "string"
+        ) && source[node.byte_range()].contains('\n')
         {
             literals.push(node.byte_range());
             continue;
@@ -65,9 +69,23 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         if node.is_error() && !in_error {
             error_bytes += node.byte_range().len();
         }
+        let dropped = if docs { None } else { docstring(source, node) };
+        if let Some((doc, sole)) = dropped {
+            let mut range = doc.byte_range();
+            if let Some(semicolon) = doc.next_sibling().filter(|next| next.kind() == ";") {
+                range.end = semicolon.end_byte();
+            }
+            // An emptied block is a syntax error, so a body that was only its docstring gets `...`.
+            edits.push(if sole {
+                (range, "...")
+            } else {
+                removal(source, range)
+            });
+        }
         let mut cursor = node.walk();
         stack.extend(
             node.children(&mut cursor)
+                .filter(|child| Some(*child) != dropped.map(|(doc, _)| doc))
                 .map(|child| (child, in_error || node.is_error())),
         );
     }
@@ -85,6 +103,35 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         mode: ModeArg::Strip,
         fallback,
     }
+}
+
+// shortcut: Python node kinds in the shared walk; move them to `@comment.doc` queries
+// (SDD §8.2) once more grammars need them.
+/// A Python docstring: the first statement of a module, class or function body when it is a bare
+/// string. `true` when it is the only statement of a class or function body.
+fn docstring<'a>(source: &str, body: Node<'a>) -> Option<(Node<'a>, bool)> {
+    let owns_docstring = match body.kind() {
+        "module" => true,
+        "block" => matches!(
+            body.parent()?.kind(),
+            "class_definition" | "function_definition"
+        ),
+        _ => false,
+    };
+    if !owns_docstring {
+        return None;
+    }
+    let mut cursor = body.walk();
+    let mut statements = body
+        .named_children(&mut cursor)
+        .filter(|child| child.kind() != "comment");
+    let first = statements.next()?;
+    let only_child = (first.kind() == "expression_statement" && first.named_child_count() == 1)
+        .then(|| first.named_child(0))??;
+    // f-strings and bytes are never docstrings, and an f-string's `{…}` may have side effects.
+    let prefix = &source[only_child.child(0)?.byte_range()];
+    (only_child.kind() == "string" && !prefix.contains(['f', 'F', 'b', 'B']))
+        .then_some((first, body.kind() == "block" && statements.next().is_none()))
 }
 
 /// A comment alone on its lines takes those lines with it; one between two tokens leaves a space
