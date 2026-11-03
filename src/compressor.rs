@@ -40,12 +40,13 @@ pub struct Compressed {
 pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool) -> Compressed {
     let Some(tree) = lang.and_then(|lang| parser::parse(lang, source)) else {
         return Compressed {
-            text: normalise(source),
+            text: normalise(source, &[]),
             mode: ModeArg::Strip,
             fallback: Some(Fallback::PlainText),
         };
     };
     let mut edits = Vec::new();
+    let mut literals = Vec::new();
     let mut error_bytes = 0;
     let mut stack = vec![(tree.root_node(), false)];
     while let Some((node, in_error)) = stack.pop() {
@@ -53,6 +54,12 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
             if !docs || node.child_by_field_name("doc").is_none() {
                 edits.push(removal(source, node.byte_range()));
             }
+            continue;
+        }
+        if matches!(node.kind(), "string_literal" | "raw_string_literal")
+            && source[node.byte_range()].contains('\n')
+        {
+            literals.push(node.byte_range());
             continue;
         }
         if node.is_error() && !in_error {
@@ -68,12 +75,13 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
     let fallback = if ratio > MAX_ERROR_RATIO {
         Some(Fallback::ParseErrors { ratio })
     } else if mode > ModeArg::Strip {
+        // shortcut: skeleton and outline aren't built, so they get strip; drop once #40–#48 land.
         Some(Fallback::ModeNotBuilt)
     } else {
         None
     };
     Compressed {
-        text: normalise(&apply(source, edits)),
+        text: apply(source, edits, &literals),
         mode: ModeArg::Strip,
         fallback,
     }
@@ -101,27 +109,53 @@ fn removal(source: &str, comment: Range<usize>) -> (Range<usize>, &'static str) 
     (start..end, if glue { " " } else { "" })
 }
 
-fn apply(source: &str, mut edits: Vec<(Range<usize>, &str)>) -> String {
+/// `literals` are multi-line string literals, whose whitespace is data and survives normalising.
+fn apply(source: &str, mut edits: Vec<(Range<usize>, &str)>, literals: &[Range<usize>]) -> String {
     edits.sort_by_key(|(range, _)| range.start);
+    let mut at = 0;
+    edits.retain(|(range, _)| {
+        let disjoint = range.start >= at;
+        at = at.max(range.end);
+        disjoint
+    });
+    let shift = |pos: usize| -> usize {
+        let removed: usize = edits
+            .iter()
+            .filter(|(range, _)| range.end <= pos)
+            .map(|(range, replacement)| range.len() - replacement.len())
+            .sum();
+        pos - removed
+    };
+    let literals: Vec<_> = literals
+        .iter()
+        .map(|range| shift(range.start)..shift(range.end))
+        .collect();
     let mut out = String::with_capacity(source.len());
     let mut at = 0;
-    for (range, replacement) in edits {
-        if range.start < at {
-            continue;
-        }
+    for (range, replacement) in &edits {
         out.push_str(&source[at..range.start]);
         out.push_str(replacement);
         at = range.end;
     }
     out.push_str(&source[at..]);
-    out
+    normalise(&out, &literals)
 }
 
-/// Trims trailing whitespace, drops leading and trailing blank lines and collapses inner runs to one.
-fn normalise(text: &str) -> String {
+/// Trims trailing whitespace, drops leading and trailing blank lines and collapses inner runs to one,
+/// except on lines that end inside `keep`.
+fn normalise(text: &str, keep: &[Range<usize>]) -> String {
     let mut out = String::with_capacity(text.len());
     let mut after_blank = true;
-    for line in text.lines().map(str::trim_end) {
+    let mut offset = 0;
+    for raw in text.split_inclusive('\n') {
+        let newline = offset + raw.len() - 1;
+        offset += raw.len();
+        if keep.iter().any(|r| r.start < newline && newline < r.end) {
+            out.push_str(raw);
+            after_blank = false;
+            continue;
+        }
+        let line = raw.trim_end();
         if line.is_empty() {
             if after_blank {
                 continue;

@@ -8,6 +8,7 @@ pub fn parse(lang: Language, source: &str) -> Option<tree_sitter::Tree> {
         Language::Rust => tree_sitter_rust::LANGUAGE.into(),
         _ => return None,
     };
+    // shortcut: a fresh Parser per file; keep one per thread when #54 parallelises.
     let mut parser = tree_sitter::Parser::new();
     parser
         .set_language(&grammar)

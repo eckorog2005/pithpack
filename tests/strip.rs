@@ -207,3 +207,19 @@ fn the_budget_is_checked_against_the_compressed_bundle() {
         out.stderr
     );
 }
+
+#[test]
+fn whitespace_inside_multi_line_string_literals_is_kept() {
+    let source = "fn a() {\n    let s = \"x   \n\n\n\ny\";   \n    let r = r#\"z  \n\"#;\n}\n";
+    let dir = fixture(&[("lib.rs", source)]);
+
+    let out = run(dir.path(), &["-0", "--no-tree", "lib.rs"]);
+
+    assert!(
+        out.stdout.contains(
+            "fn a() {\n    let s = \"x   \n\n\n\ny\";\n    let r = r#\"z  \n\"#;\n}\n</file>"
+        ),
+        "{}",
+        out.stdout
+    );
+}
