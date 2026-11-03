@@ -1,0 +1,43 @@
+---
+source: tests/strip.rs
+expression: files(&out.stdout)
+---
+<file path="geo.go" lang="go" mode="strip" tokens="109">
+package geo
+
+import "fmt"
+
+type Point struct {
+	X int
+	Y int
+
+	Z int
+}
+
+func (p Point) Sum() int {
+	s := `// not a comment
+	   kept   `
+	return p.X + p.Y + len(s)
+}
+
+func Helper() { fmt.Println() }
+
+const (
+	A = 1
+)
+
+var (
+	B, C = 2, 3
+)
+
+type (
+	Shape interface {
+		Area() float64
+	}
+)
+
+func Local() {
+	const d = 1
+}
+</file>
+</bundle>
