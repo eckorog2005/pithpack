@@ -421,3 +421,151 @@ fn no_docs_removes_go_doc_comments() {
 
     insta::assert_snapshot!(files(&out.stdout));
 }
+
+const TYPESCRIPT: &str = "\
+/** Module header is not before a declaration. */
+
+// A free header comment.
+import { a } from \"./a\";
+
+/** Shape docs survive. */
+export interface Shape {
+  /** Area docs survive. */
+  area(): number; // trailing note
+}
+
+/* A block comment is never a Doc Comment. */
+type Id = string;
+
+enum Color {
+  /** Red docs survive. */
+  Red,
+  /** Blue docs survive. */
+  Blue = 2,
+}
+
+/** Point docs survive. */
+@sealed
+class Point {
+  /** X docs survive. */
+  x = 1;
+
+  /** Sum docs survive. */
+  sum(): number {
+    /** Not before a declaration. */
+    a();
+    const s = `// not a comment
+      kept   `;
+    return this.x/*glued*/+s.length;
+  }
+}
+
+/** Detached from helper by a blank line. */
+
+function helper() {}
+
+/** Total docs survive. */
+const total = 1;
+";
+
+#[test]
+fn strip_removes_free_comments_and_keeps_doc_comments_in_typescript() {
+    let dir = fixture(&[("shape.ts", TYPESCRIPT)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-tree", "--report", "none", "shape.ts"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+}
+
+const JSX: &str = "\
+// A free header comment.
+import React from \"react\";
+
+/** Card docs survive. */
+export function Card({ url }) {
+  // A free comment in a body.
+  return (
+    <a href=\"http://example.com\" title=\"/* not a comment */\">
+      {/* A JSX comment. */}
+      Visit   // not a comment either
+      <b>{url}</b>
+    </a>
+  );
+}
+";
+
+#[test]
+fn strip_leaves_jsx_markup_untouched() {
+    let dir = fixture(&[("card.jsx", JSX)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-tree", "--report", "none", "card.jsx"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+}
+
+#[test]
+fn strip_leaves_tsx_markup_untouched() {
+    let tsx = JSX.replace("({ url })", "({ url }: { url: string })");
+    let dir = fixture(&[("card.tsx", &tsx)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-tree", "--report", "none", "card.tsx"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+}
+
+#[test]
+fn no_docs_removes_jsdoc_comments() {
+    let dir = fixture(&[("shape.ts", TYPESCRIPT)]);
+
+    let out = run(
+        dir.path(),
+        &[
+            "-0",
+            "--no-docs",
+            "--no-tree",
+            "--report",
+            "none",
+            "shape.ts",
+        ],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+}
+
+const JAVASCRIPT: &str = "\
+/** Exports docs survive. */
+module.exports.area = function () {};
+
+/** Lint docs survive. */
+// eslint-disable-next-line
+function lint() {}
+
+const point = {
+  /** Prop docs survive. */
+  x: 1, // trailing note
+};
+
+/** Not before a declaration. */
+lint();
+";
+
+#[test]
+fn strip_removes_free_comments_and_keeps_doc_comments_in_javascript() {
+    let dir = fixture(&[("geo.js", JAVASCRIPT)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-tree", "--report", "none", "geo.js"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+}

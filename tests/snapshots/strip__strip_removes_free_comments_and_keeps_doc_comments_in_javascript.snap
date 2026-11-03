@@ -1,0 +1,19 @@
+---
+source: tests/strip.rs
+expression: files(&out.stdout)
+---
+<file path="geo.js" lang="javascript" mode="strip" tokens="46">
+/** Exports docs survive. */
+module.exports.area = function () {};
+
+/** Lint docs survive. */
+function lint() {}
+
+const point = {
+  /** Prop docs survive. */
+  x: 1,
+};
+
+lint();
+</file>
+</bundle>

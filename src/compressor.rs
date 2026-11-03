@@ -54,15 +54,32 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
     while let Some((node, in_error)) = stack.pop() {
         if matches!(node.kind(), "line_comment" | "block_comment" | "comment") {
             let doc = node.child_by_field_name("doc").is_some()
-                || (lang == Some(Language::Go) && is_go_doc(source, node));
+                || match lang {
+                    Some(Language::Go) => is_go_doc(source, node),
+                    Some(
+                        Language::TypeScript | Language::Tsx | Language::JavaScript | Language::Jsx,
+                    ) => is_jsdoc(source, node),
+                    _ => false,
+                };
             if !docs || !doc {
-                edits.push(removal(source, node.byte_range()));
+                // `{/* … */}` emptied of comments would leave a stray `{ }` in the markup.
+                let target = node
+                    .parent()
+                    .filter(|parent| {
+                        let mut cursor = parent.walk();
+                        parent.kind() == "jsx_expression"
+                            && parent
+                                .named_children(&mut cursor)
+                                .all(|child| child.kind() == "comment")
+                    })
+                    .unwrap_or(node);
+                edits.push(removal(source, target.byte_range()));
             }
             continue;
         }
         if matches!(
             node.kind(),
-            "string_literal" | "raw_string_literal" | "string"
+            "string_literal" | "raw_string_literal" | "string" | "template_string"
         ) && source[node.byte_range()].contains('\n')
         {
             literals.push(node.byte_range());
@@ -166,6 +183,57 @@ fn is_go_doc(source: &str, comment: Node) -> bool {
             let in_function = std::iter::successors(next.parent(), Node::parent)
                 .any(|ancestor| ancestor.kind() == "block");
             return member || (declaration && !in_function);
+        }
+        node = next;
+    }
+    false
+}
+
+/// A JSDoc: a `/** … */` comment directly above a declaration, member or assignment, possibly
+/// through other comments.
+fn is_jsdoc(source: &str, comment: Node) -> bool {
+    let text = &source[comment.byte_range()];
+    if !text.starts_with("/**") || text == "/**/" {
+        return false;
+    }
+    let mut node = comment;
+    while let Some(next) = node.next_sibling() {
+        if next.start_position().row > node.end_position().row + 1 {
+            return false;
+        }
+        if next.kind() != "comment" {
+            // `module.exports.x = …` and `this.x = …` are how plain JS declares API.
+            let assignment = next.kind() == "expression_statement"
+                && next
+                    .named_child(0)
+                    .is_some_and(|expression| expression.kind() == "assignment_expression");
+            return assignment
+                || matches!(
+                    next.kind(),
+                    "export_statement"
+                        | "function_declaration"
+                        | "generator_function_declaration"
+                        | "class_declaration"
+                        | "abstract_class_declaration"
+                        | "lexical_declaration"
+                        | "variable_declaration"
+                        | "method_definition"
+                        | "field_definition"
+                        | "public_field_definition"
+                        | "pair"
+                        | "interface_declaration"
+                        | "type_alias_declaration"
+                        | "enum_declaration"
+                        | "enum_assignment"
+                        | "property_identifier"
+                        | "module"
+                        | "internal_module"
+                        | "ambient_declaration"
+                        | "function_signature"
+                        | "method_signature"
+                        | "abstract_method_signature"
+                        | "property_signature"
+                );
         }
         node = next;
     }
