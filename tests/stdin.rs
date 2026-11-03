@@ -15,7 +15,7 @@ fn piped_stdin_without_paths_is_one_plain_text_source_file() {
     assert_eq!(file_paths(&out.stdout), ["&lt;stdin&gt;"]);
     assert!(
         out.stdout.contains(
-            "<file path=\"&lt;stdin&gt;\" lang=\"text\" mode=\"none\" tokens=\"2\">\n\
+            "<file path=\"&lt;stdin&gt;\" lang=\"text\" mode=\"strip\" tokens=\"2\">\n\
              hi\n\
              </file>\n"
         ),
@@ -23,7 +23,7 @@ fn piped_stdin_without_paths_is_one_plain_text_source_file() {
         out.stdout
     );
     assert!(
-        out.stderr.contains(" <stdin>  text  none  3B → 3B"),
+        out.stderr.contains(" <stdin>  text  strip*  3B → 3B"),
         "{}",
         out.stderr
     );
@@ -80,18 +80,18 @@ fn lang_labels_stdin_in_the_bundle_and_the_report() {
 
     assert!(
         out.stdout
-            .contains("<file path=\"&lt;stdin&gt;\" lang=\"python\" mode=\"none\" "),
+            .contains("<file path=\"&lt;stdin&gt;\" lang=\"python\" mode=\"strip\" "),
         "{}",
         out.stdout
     );
     assert!(
         out.stdout
-            .contains("<file path=\"a.txt\" lang=\"text\" mode=\"none\" "),
+            .contains("<file path=\"a.txt\" lang=\"text\" mode=\"strip\" "),
         "--lang touches only stdin: {}",
         out.stdout
     );
     assert!(
-        out.stderr.contains(" <stdin>  python  none "),
+        out.stderr.contains(" <stdin>  python  strip* "),
         "{}",
         out.stderr
     );

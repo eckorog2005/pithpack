@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod compressor;
 pub mod config;
 pub mod encoder;
 pub mod formatter;
@@ -18,9 +19,6 @@ use encoder::Encoder;
 use formatter::{BundleMeta, FileBlock};
 use report::{FileStat, Report, ReportFormat};
 use scanner::{Origin, Skip};
-
-/// Content passes through uncompressed until the compressor lands, so no Mode is claimed.
-const UNCOMPRESSED: &str = "none";
 
 pub struct Io<'a> {
     pub stdin: &'a mut dyn Read,
@@ -91,25 +89,37 @@ pub fn run(opts: Options, io: Io) -> anyhow::Result<Outcome> {
             texts.push(raw.into_owned());
         }
     }
+    let langs: Vec<_> = scan
+        .candidates
+        .iter()
+        .map(|c| match c.origin {
+            Origin::Stdin => opts.stdin_lang,
+            Origin::Explicit | Origin::Walked => parser::detect(&c.display),
+        })
+        .collect();
+    let compressed: Vec<_> = texts
+        .iter()
+        .zip(&langs)
+        .map(|(text, &lang)| compressor::compress(lang, text, opts.mode, opts.docs))
+        .collect();
     let encoder = warm.join().expect("encoder initialisation panicked");
     let blocks: Vec<FileBlock> = scan
         .candidates
         .iter()
-        .zip(&texts)
-        .map(|(c, text)| FileBlock {
+        .zip(&langs)
+        .zip(&compressed)
+        .map(|((c, &lang), out)| FileBlock {
             display: &c.display,
-            lang: match c.origin {
-                Origin::Stdin => opts.stdin_lang,
-                Origin::Explicit | Origin::Walked => parser::detect(&c.display),
-            },
-            mode: UNCOMPRESSED,
-            tokens: encoder.count(text),
-            text,
+            lang,
+            mode: out.mode.name(),
+            tokens: encoder.count(&out.text),
+            text: &out.text,
         })
         .collect();
     let mut meta = BundleMeta {
         format: opts.format,
-        mode: UNCOMPRESSED,
+        // shortcut: only strip exists, so every file lands there; label by request once skeleton does.
+        mode: opts.mode.min(cli::ModeArg::Strip).name(),
         tokenizer: encoder.name(),
         tokens: 0,
         tree: opts.tree,
@@ -123,18 +133,24 @@ pub fn run(opts: Options, io: Io) -> anyhow::Result<Outcome> {
         let report = Report {
             files: blocks
                 .iter()
+                .zip(&compressed)
+                .zip(&texts)
                 .zip(&read_bytes)
                 .zip(&redactions)
-                .map(|((b, &original_bytes), &redactions)| FileStat {
-                    display: b.display.to_string(),
-                    lang: b.lang,
-                    mode: b.mode,
-                    original_bytes,
-                    original_tokens: b.tokens,
-                    compressed_bytes: b.text.len() as u64,
-                    compressed_tokens: b.tokens,
-                    redactions,
-                })
+                .map(
+                    |((((b, out), original), &original_bytes), &redactions)| FileStat {
+                        display: b.display.to_string(),
+                        lang: b.lang,
+                        requested_mode: opts.mode.name(),
+                        mode: b.mode,
+                        fallback: out.fallback,
+                        original_bytes,
+                        original_tokens: encoder.count(original),
+                        compressed_bytes: b.text.len() as u64,
+                        compressed_tokens: b.tokens,
+                        redactions,
+                    },
+                )
                 .collect(),
             skipped: scan.skipped,
             bundle_tokens: meta.tokens,

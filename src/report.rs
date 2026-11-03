@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::compressor::Fallback;
 use crate::parser::{self, Language};
 use crate::scanner::Skip;
 
@@ -13,7 +14,9 @@ pub enum ReportFormat {
 pub struct FileStat {
     pub display: String,
     pub lang: Option<Language>,
+    pub requested_mode: &'static str,
     pub mode: &'static str,
+    pub fallback: Option<Fallback>,
     pub original_bytes: u64,
     pub original_tokens: usize,
     pub compressed_bytes: u64,
@@ -39,8 +42,12 @@ pub fn render_json(r: &Report) -> String {
             json!({
                 "path": f.display,
                 "lang": parser::lang_name(f.lang),
-                "requested_mode": f.mode,
+                "requested_mode": f.requested_mode,
                 "effective_mode": f.mode,
+                "fallback": f.fallback.map(|fb| match fb {
+                    Fallback::ParseErrors { ratio } => json!({"reason": fb.reason(), "error_ratio": ratio}),
+                    _ => json!({"reason": fb.reason()}),
+                }),
                 "original_bytes": f.original_bytes,
                 "original_tokens": f.original_tokens,
                 "compressed_bytes": f.compressed_bytes,
@@ -78,7 +85,7 @@ const RESET: &str = "\x1b[0m";
 struct Row {
     file: String,
     lang: &'static str,
-    mode: &'static str,
+    mode: String,
     bytes: (String, String),
     tokens: (String, String),
     saved: String,
@@ -89,7 +96,7 @@ impl Row {
     fn new(
         file: String,
         lang: &'static str,
-        mode: &'static str,
+        mode: String,
         bytes: (u64, u64),
         tokens: (usize, usize),
         redactions: usize,
@@ -122,7 +129,10 @@ pub fn render_table(r: &Report, color: bool) -> String {
             Row::new(
                 f.display.clone(),
                 parser::lang_name(f.lang),
-                f.mode,
+                match f.fallback {
+                    Some(_) => format!("{}*", f.mode),
+                    None => f.mode.to_string(),
+                },
                 (f.original_bytes, f.compressed_bytes),
                 (f.original_tokens, f.compressed_tokens),
                 f.redactions,
@@ -135,7 +145,7 @@ pub fn render_table(r: &Report, color: bool) -> String {
     let totals = Row::new(
         counted(r.files.len(), "file", "files"),
         "",
-        "",
+        String::new(),
         (
             sum_bytes(|f| f.original_bytes),
             sum_bytes(|f| f.compressed_bytes),
@@ -195,7 +205,7 @@ pub fn render_table(r: &Report, color: bool) -> String {
         let saved = format!("{:>saved_w$}", row.saved);
         out.push_str(&format!(
             "{}{}  {}  {}{}\n",
-            lead(&row.file, row.lang, row.mode),
+            lead(&row.file, row.lang, &row.mode),
             pair(&row.bytes, bytes_w, bytes_cell),
             pair(&row.tokens, tokens_w, tokens_cell),
             paint(GREEN, &saved),
@@ -233,6 +243,17 @@ pub fn render_table(r: &Report, color: bool) -> String {
     }
     footer.push_str(&format!(" · {} ms", r.elapsed.as_millis()));
     out.push_str(&format!(" {}\n", paint(DIM, &footer)));
+    let mut notes: Vec<&str> = r
+        .files
+        .iter()
+        .filter_map(|f| f.fallback)
+        .map(|fb| fb.note())
+        .collect();
+    notes.sort_unstable();
+    notes.dedup();
+    for note in notes {
+        out.push_str(&format!(" * {note}\n"));
+    }
     out
 }
 
@@ -303,7 +324,9 @@ mod tests {
         FileStat {
             display: display.to_string(),
             lang: Some(Language::Rust),
-            mode: "none",
+            requested_mode: "strip",
+            mode: "strip",
+            fallback: None,
             original_bytes: bytes.0,
             original_tokens: tokens.0,
             compressed_bytes: bytes.1,
@@ -333,13 +356,13 @@ mod tests {
         assert_eq!(
             render_table(&r, false),
             format!(
-                " file               lang  mode  bytes         tokens         saved\n \
-                 src/lib.rs         rust  none  14.2K → 3.1K  3,402 → 912    73.2%\n \
-                 src/parser/mod.rs  rust  none  11.8K → 2.9K  2,977 → 870    70.8%\n \
+                " file               lang  mode   bytes         tokens         saved\n \
+                 src/lib.rs         rust  strip  14.2K → 3.1K  3,402 → 912    73.2%\n \
+                 src/parser/mod.rs  rust  strip  11.8K → 2.9K  2,977 → 870    70.8%\n \
                  {}\n \
-                 2 files                        26.0K → 6.0K  6,379 → 1,782  72.1%\n \
+                 2 files                         26.0K → 6.0K  6,379 → 1,782  72.1%\n \
                  bundle: 1,834 tokens (o200k_base) · 41 ms\n",
-                "─".repeat(65)
+                "─".repeat(66)
             )
         );
     }
@@ -353,11 +376,11 @@ mod tests {
         let table = render_table(&r, false);
 
         assert!(
-            table.contains(" e.txt  text  none    0B → 0B    0 → 0    0.0%\n"),
+            table.contains(" e.txt  text  strip    0B → 0B    0 → 0    0.0%\n"),
             "{table}"
         );
         assert!(
-            table.contains(" a.rs   rust  none  512B → 512B  9 → 9    0.0%\n"),
+            table.contains(" a.rs   rust  strip  512B → 512B  9 → 9    0.0%\n"),
             "{table}"
         );
     }
@@ -419,9 +442,9 @@ mod tests {
 
         assert!(
             table.starts_with(
-                " file  lang  mode  bytes      tokens  saved  redactions\n \
-                 a.rs  rust  none  10B → 10B  4 → 4    0.0%           1\n \
-                 b.rs  rust  none  10B → 10B  4 → 4    0.0%           0\n"
+                " file  lang  mode   bytes      tokens  saved  redactions\n \
+                 a.rs  rust  strip  10B → 10B  4 → 4    0.0%           1\n \
+                 b.rs  rust  strip  10B → 10B  4 → 4    0.0%           0\n"
             ),
             "{table}"
         );

@@ -27,8 +27,9 @@ fn the_json_report_has_a_stable_shape_on_stderr_only() {
             "files": [{
                 "path": "a.rs",
                 "lang": "rust",
-                "requested_mode": "none",
-                "effective_mode": "none",
+                "requested_mode": "skeleton",
+                "effective_mode": "strip",
+                "fallback": {"reason": "mode_not_built"},
                 "original_bytes": 10,
                 "original_tokens": null,
                 "compressed_bytes": 10,

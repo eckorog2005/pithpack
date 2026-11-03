@@ -7,11 +7,21 @@ use crate::formatter::Format;
 use crate::parser::Language;
 use crate::report::ReportFormat;
 
-#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ModeArg {
     Strip,
     Skeleton,
     Outline,
+}
+
+impl ModeArg {
+    pub fn name(self) -> &'static str {
+        match self {
+            ModeArg::Strip => "strip",
+            ModeArg::Skeleton => "skeleton",
+            ModeArg::Outline => "outline",
+        }
+    }
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -66,7 +76,7 @@ pub struct CliArgs {
     #[arg(short, long, value_enum)]
     pub format: Option<Format>,
 
-    /// Mode; accepted but not applied yet, so output is labelled `none` [default: skeleton]
+    /// Mode; `skeleton` and `outline` compress as `strip` until they are built [default: skeleton]
     #[arg(
         short,
         long,
@@ -88,7 +98,7 @@ pub struct CliArgs {
     #[arg(short = '2')]
     pub outline: bool,
 
-    /// Also drop Doc Comments; a no-op until compression lands
+    /// Also drop Doc Comments
     #[arg(long)]
     pub no_docs: bool,
 
