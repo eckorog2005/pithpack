@@ -1,0 +1,55 @@
+---
+source: tests/strip.rs
+expression: files(&out.stdout)
+---
+<file path="geo.go" lang="go" mode="strip" tokens="176">
+// Package docs survive.
+package geo
+
+import "fmt"
+
+// Point docs survive,
+// all of the block.
+type Point struct {
+	// X docs survive.
+	X int
+	// Y docs survive.
+	/* so does this */
+	Y int
+
+	Z int
+}
+
+/* Sum docs survive. */
+func (p Point) Sum() int {
+	s := `// not a comment
+	   kept   `
+	return p.X + p.Y + len(s)
+}
+
+func Helper() { fmt.Println() }
+
+const (
+	// A docs survive.
+	A = 1
+)
+
+var (
+	// B docs survive.
+	B, C = 2, 3
+)
+
+type (
+	// Shape docs survive.
+	Shape interface {
+		// Area docs survive.
+		Area() float64
+	}
+)
+
+// Local docs survive.
+func Local() {
+	const d = 1
+}
+</file>
+</bundle>

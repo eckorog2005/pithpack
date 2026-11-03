@@ -339,3 +339,85 @@ fn no_docs_leaves_valid_python_and_only_removes_plain_string_docstrings() {
     );
     assert_valid_python(file_text(&out.stdout));
 }
+
+const GO: &str = "\
+// Package docs survive.
+package geo
+
+// A free comment before imports.
+import \"fmt\"
+
+// Point docs survive,
+// all of the block.
+type Point struct {
+\t// X docs survive.
+\tX int // trailing note
+\t// Y docs survive.
+\t/* so does this */
+\tY int
+
+\t// Detached from Z by a blank line.
+
+\tZ int
+}
+
+/* Sum docs survive. */
+func (p Point) Sum() int {
+\t// A free comment in a body.
+\ts := `// not a comment
+\t   kept   `
+\treturn p.X + p.Y + len(s)
+}
+
+// Detached from Helper.
+
+func Helper() { fmt.Println() }
+
+const (
+\t// A docs survive.
+\tA = 1
+)
+
+var (
+\t// B docs survive.
+\tB, C = 2, 3
+)
+
+type (
+\t// Shape docs survive.
+\tShape interface {
+\t\t// Area docs survive.
+\t\tArea() float64
+\t}
+)
+
+// Local docs survive.
+func Local() {
+\t// A local const is not a declaration doc.
+\tconst d = 1
+}
+";
+
+#[test]
+fn strip_removes_free_comments_and_keeps_doc_comments_in_go() {
+    let dir = fixture(&[("geo.go", GO)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-tree", "--report", "none", "geo.go"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+}
+
+#[test]
+fn no_docs_removes_go_doc_comments() {
+    let dir = fixture(&[("geo.go", GO)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-docs", "--no-tree", "--report", "none", "geo.go"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+}

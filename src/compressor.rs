@@ -53,7 +53,9 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
     let mut stack = vec![(tree.root_node(), false)];
     while let Some((node, in_error)) = stack.pop() {
         if matches!(node.kind(), "line_comment" | "block_comment" | "comment") {
-            if !docs || node.child_by_field_name("doc").is_none() {
+            let doc = node.child_by_field_name("doc").is_some()
+                || (lang == Some(Language::Go) && is_go_doc(source, node));
+            if !docs || !doc {
                 edits.push(removal(source, node.byte_range()));
             }
             continue;
@@ -132,6 +134,42 @@ fn docstring<'a>(source: &str, body: Node<'a>) -> Option<(Node<'a>, bool)> {
     let prefix = &source[only_child.child(0)?.byte_range()];
     (only_child.kind() == "string" && !prefix.contains(['f', 'F', 'b', 'B']))
         .then_some((first, body.kind() == "block" && statements.next().is_none()))
+}
+
+/// A Go Doc Comment: part of a block of own-line comments whose last line sits directly above a
+/// top-level declaration (or a spec in a grouped one), struct field or interface method.
+fn is_go_doc(source: &str, comment: Node) -> bool {
+    let start = comment.start_byte();
+    let line_start = source[..start].rfind('\n').map_or(0, |i| i + 1);
+    if !source[line_start..start].trim().is_empty() {
+        return false;
+    }
+    let mut node = comment;
+    while let Some(next) = node.next_sibling() {
+        if next.start_position().row != node.end_position().row + 1 {
+            return false;
+        }
+        if next.kind() != "comment" {
+            let member = matches!(next.kind(), "field_declaration" | "method_elem");
+            let declaration = matches!(
+                next.kind(),
+                "package_clause"
+                    | "function_declaration"
+                    | "method_declaration"
+                    | "type_declaration"
+                    | "const_declaration"
+                    | "var_declaration"
+                    | "type_spec"
+                    | "const_spec"
+                    | "var_spec"
+            );
+            let in_function = std::iter::successors(next.parent(), Node::parent)
+                .any(|ancestor| ancestor.kind() == "block");
+            return member || (declaration && !in_function);
+        }
+        node = next;
+    }
+    false
 }
 
 /// A comment alone on its lines takes those lines with it; one between two tokens leaves a space
