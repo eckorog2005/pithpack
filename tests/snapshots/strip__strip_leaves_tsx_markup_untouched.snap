@@ -1,0 +1,18 @@
+---
+source: tests/strip.rs
+expression: files(&out.stdout)
+---
+<file path="card.tsx" lang="tsx" mode="strip" tokens="69">
+import React from "react";
+
+/** Card docs survive. */
+export function Card({ url }: { url: string }) {
+  return (
+    <a href="http://example.com" title="/* not a comment */">
+      Visit   // not a comment either
+      <b>{url}</b>
+    </a>
+  );
+}
+</file>
+</bundle>

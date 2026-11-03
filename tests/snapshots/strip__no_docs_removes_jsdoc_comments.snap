@@ -1,0 +1,35 @@
+---
+source: tests/strip.rs
+expression: files(&out.stdout)
+---
+<file path="shape.ts" lang="typescript" mode="strip" tokens="91">
+import { a } from "./a";
+
+export interface Shape {
+  area(): number;
+}
+
+type Id = string;
+
+enum Color {
+  Red,
+  Blue = 2,
+}
+
+@sealed
+class Point {
+  x = 1;
+
+  sum(): number {
+    a();
+    const s = `// not a comment
+      kept   `;
+    return this.x +s.length;
+  }
+}
+
+function helper() {}
+
+const total = 1;
+</file>
+</bundle>
