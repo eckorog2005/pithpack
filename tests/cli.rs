@@ -159,7 +159,7 @@ fn an_unknown_lang_is_a_usage_error() {
 }
 
 #[test]
-fn every_mode_flag_is_labelled_none_in_bundle_and_report_with_no_savings() {
+fn every_mode_flag_compresses_as_strip_and_is_labelled_so() {
     let dir = fixture(&[("a.rs", "// c\npub fn a() {}\n")]);
     let home = tempfile::tempdir().unwrap();
 
@@ -179,16 +179,12 @@ fn every_mode_flag_is_labelled_none_in_bundle_and_report_with_no_savings() {
             .assert()
             .code(0)
             .stdout(
-                predicate::str::contains(" mode=\"none\" tokens=\"")
+                predicate::str::contains(" mode=\"strip\" tokens=\"")
+                    .and(predicate::str::contains("// c").not())
                     .and(predicate::str::contains("mode=\"skeleton\"").not())
-                    .and(predicate::str::contains("mode=\"outline\"").not())
-                    .and(predicate::str::contains("mode=\"strip\"").not()),
+                    .and(predicate::str::contains("mode=\"outline\"").not()),
             )
-            .stderr(
-                predicate::str::contains(" none ")
-                    .and(predicate::str::contains("0.0%"))
-                    .and(predicate::str::contains("skeleton").not()),
-            );
+            .stderr(predicate::str::contains(" strip").and(predicate::str::contains("0.0%").not()));
     }
 }
 
