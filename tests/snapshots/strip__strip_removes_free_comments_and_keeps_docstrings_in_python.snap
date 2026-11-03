@@ -1,0 +1,33 @@
+---
+source: tests/strip.rs
+assertion_line: 281
+expression: files(&out.stdout)
+---
+<file path="app.py" lang="python" mode="strip" tokens="98">
+"""Module docs survive."""
+
+import os
+
+class Point:
+    """Class docs survive.
+
+    Even    their    whitespace.
+    """
+
+    x = 1
+
+    def total(self):
+        '''Function docs survive.'''
+        s = "# not a comment"
+        note = """not a docstring"""
+        return self.x
+
+def only_docs():
+    """The whole body."""
+
+def nested():
+    if True:
+        """An if body has no docstring."""
+        return 1
+</file>
+</bundle>

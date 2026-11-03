@@ -1,5 +1,8 @@
 mod common;
 
+use std::io::Write;
+use std::process::{Command, Stdio};
+
 use common::{fixture, run};
 
 const RUST: &str = "\
@@ -222,4 +225,117 @@ fn whitespace_inside_multi_line_string_literals_is_kept() {
         "{}",
         out.stdout
     );
+}
+
+const PYTHON: &str = "\
+#!/usr/bin/env python3
+\"\"\"Module docs survive.\"\"\"
+
+# A free header comment.
+import os
+
+
+class Point:
+    \"\"\"Class docs survive.
+
+    Even    their    whitespace.
+    \"\"\"
+
+    x = 1  # trailing note
+
+    def total(self):
+        '''Function docs survive.'''
+        # A free comment in a body.
+        s = \"# not a comment\"
+        note = \"\"\"not a docstring\"\"\"
+        return self.x
+
+
+def only_docs():
+    \"\"\"The whole body.\"\"\"
+
+
+def nested():
+    if True:
+        \"\"\"An if body has no docstring.\"\"\"
+        return 1
+";
+
+/// The compressed text of the one `<file>` block in a Bundle.
+fn file_text(stdout: &str) -> &str {
+    let file = &stdout[stdout.find("<file ").unwrap()..];
+    let start = file.find(">\n").unwrap() + 2;
+    &file[start..file.rfind("</file>").unwrap()]
+}
+
+/// Asks a real Python, since tree-sitter's error recovery accepts some invalid code (an empty body).
+fn assert_valid_python(source: &str) {
+    let check = "import ast, sys; ast.parse(sys.stdin.read())";
+    let output = ["python3", "python"]
+        .into_iter()
+        .find_map(|python| {
+            let mut child = Command::new(python)
+                .args(["-c", check])
+                .stdin(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .ok()?;
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(source.as_bytes())
+                .unwrap();
+            Some(child.wait_with_output().unwrap())
+        })
+        .expect("a Python interpreter on PATH");
+    assert!(
+        output.status.success(),
+        "{}\n{source}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn strip_removes_free_comments_and_keeps_docstrings_in_python() {
+    let dir = fixture(&[("app.py", PYTHON)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-tree", "--report", "none", "app.py"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+    assert_valid_python(file_text(&out.stdout));
+}
+
+#[test]
+fn no_docs_removes_python_docstrings_and_keeps_emptied_bodies_valid() {
+    let dir = fixture(&[("app.py", PYTHON)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-docs", "--no-tree", "--report", "none", "app.py"],
+    );
+
+    insta::assert_snapshot!(files(&out.stdout));
+    assert_valid_python(file_text(&out.stdout));
+}
+
+#[test]
+fn no_docs_leaves_valid_python_and_only_removes_plain_string_docstrings() {
+    let source =
+        "\"\"\"Doc.\"\"\"; x = 1\n\ndef f():\n    f\"\"\"{x}\"\"\"\n\ndef g():\n    b\"bytes\"\n";
+    let dir = fixture(&[("app.py", source)]);
+
+    let out = run(
+        dir.path(),
+        &["-0", "--no-docs", "--no-tree", "--report", "none", "app.py"],
+    );
+
+    assert_eq!(
+        file_text(&out.stdout),
+        "x = 1\n\ndef f():\n    f\"\"\"{x}\"\"\"\n\ndef g():\n    b\"bytes\"\n"
+    );
+    assert_valid_python(file_text(&out.stdout));
 }
