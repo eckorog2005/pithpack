@@ -1,0 +1,27 @@
+---
+source: tests/strip.rs
+expression: files(&out.stdout)
+---
+<file path="index.html" lang="html" mode="strip" tokens="134">
+<!DOCTYPE html>
+<html>
+<head>
+  <title>A <!-- literal --> title</title>
+  <style>
+    /* style comments are CSS, left as is */
+    p { color: red; }
+  </style>
+  <script>
+    // script comments are JavaScript, left as is
+    const s = "<!-- not a comment -->";
+  </script>
+</head>
+<body>
+  <p>Not IE</p>
+  <p title="<!-- not a comment -->">foobar</p>
+  <img alt='<!-- not a comment -->' />
+  <textarea><!-- literal text --></textarea>
+</body>
+</html>
+</file>
+</bundle>

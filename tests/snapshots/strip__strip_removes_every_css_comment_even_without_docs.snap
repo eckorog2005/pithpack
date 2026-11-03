@@ -1,0 +1,15 @@
+---
+source: tests/strip.rs
+expression: files(&docs.stdout)
+---
+<file path="site.css" lang="css" mode="strip" tokens="44">
+@import url("//example.com/a.css");
+
+.card {
+  color: red;
+  content: "/* not a comment */";
+  background: url(http://example.com/x.png);
+  margin: 0;
+}
+</file>
+</bundle>
