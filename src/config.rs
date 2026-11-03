@@ -72,6 +72,8 @@ pub struct Options {
     pub exclusion_extra: Vec<String>,
     pub redaction_extra: Vec<PatternSpec>,
     pub stdin_lang: Option<Language>,
+    pub mode: ModeArg,
+    pub docs: bool,
     /// Only the CLI can turn this off; no config key may.
     pub redact: bool,
     pub format: Format,
@@ -124,10 +126,6 @@ struct FileConfig {
     format: Option<String>,
     tokenizer: Option<String>,
     tree: Option<bool>,
-    #[allow(
-        dead_code,
-        reason = "accepted now so the key round-trips once compression lands"
-    )]
     docs: Option<bool>,
     include: Option<Vec<String>>,
     #[serde(default)]
@@ -171,6 +169,8 @@ enum Size {
 
 /// The lower layers folded together: scalars replaced, lists concatenated.
 struct Settings {
+    mode: ModeArg,
+    docs: bool,
     format: Format,
     tokenizer: TokenizerKind,
     tree: bool,
@@ -186,6 +186,8 @@ struct Settings {
 impl Settings {
     fn builtin() -> Settings {
         Settings {
+            mode: ModeArg::Skeleton,
+            docs: true,
             format: Format::Xml,
             tokenizer: TokenizerKind::O200k,
             tree: true,
@@ -204,7 +206,7 @@ impl Settings {
             T::from_str(value, true).map_err(|_| format!("`{key}` has an unknown value `{value}`"))
         }
         if let Some(mode) = &cfg.mode {
-            parse::<ModeArg>("mode", mode)?;
+            self.mode = parse("mode", mode)?;
         }
         if let Some(format) = &cfg.format {
             self.format = parse("format", format)?;
@@ -236,6 +238,7 @@ impl Settings {
         Rules::with_extra(&patterns).map_err(|err| err.to_string())?;
 
         self.tree = cfg.tree.unwrap_or(self.tree);
+        self.docs = cfg.docs.unwrap_or(self.docs);
         self.follow_symlinks = cfg.follow_symlinks.unwrap_or(self.follow_symlinks);
         self.budget = cfg.budget.or(self.budget);
         self.include = cfg.include.unwrap_or(std::mem::take(&mut self.include));
@@ -334,6 +337,14 @@ pub fn resolve(cli: CliArgs, env: &Env) -> Result<Options, ConfigError> {
         exclusion_extra: settings.exclusion_extra,
         redaction_extra: settings.redaction_extra,
         stdin_lang: cli.lang,
+        mode: match (cli.mode, cli.strip, cli.skeleton, cli.outline) {
+            (Some(mode), ..) => mode,
+            (None, true, ..) => ModeArg::Strip,
+            (None, _, true, _) => ModeArg::Skeleton,
+            (None, .., true) => ModeArg::Outline,
+            _ => settings.mode,
+        },
+        docs: !cli.no_docs && settings.docs,
         redact: !cli.no_redact,
         format: cli.format.unwrap_or(settings.format),
         tree: !cli.no_tree && settings.tree,
@@ -355,7 +366,7 @@ pub fn resolve(cli: CliArgs, env: &Env) -> Result<Options, ConfigError> {
 
 const INIT_TEMPLATE: &str = r#"# pithpack.toml: every key is optional; values shown are the defaults.
 # CLI flags override this file, which overrides the user config.
-# `mode` and `docs` are accepted but not applied until compression lands.
+# `skeleton` and `outline` compress as `strip` until they are built.
 
 mode            = "skeleton"   # "strip" | "skeleton" | "outline"
 format          = "xml"        # "xml" | "markdown"

@@ -12,14 +12,14 @@ fn bundles_a_directory_into_file_blocks_carrying_token_counts() {
     let (header, body) = out.stdout.split_once('\n').unwrap();
     assert!(
         header.starts_with(&format!(
-            "<bundle tool=\"pithpack\" version=\"{}\" mode=\"none\" tokenizer=\"o200k_base\" files=\"1\" tokens=\"",
+            "<bundle tool=\"pithpack\" version=\"{}\" mode=\"strip\" tokenizer=\"o200k_base\" files=\"1\" tokens=\"",
             env!("CARGO_PKG_VERSION")
         )),
         "{header}"
     );
     assert_eq!(
         body,
-        "<file path=\"src/lib.rs\" lang=\"rust\" mode=\"none\" tokens=\"3\">\n\
+        "<file path=\"src/lib.rs\" lang=\"rust\" mode=\"strip\" tokens=\"3\">\n\
          hello world\n\
          </file>\n\
          </bundle>\n"
@@ -53,7 +53,7 @@ fn the_tokenizer_flag_switches_to_cl100k_and_names_it() {
     assert!(header.contains(" tokenizer=\"cl100k_base\" "), "{header}");
     assert!(
         out.stdout
-            .contains("<file path=\"a.txt\" lang=\"text\" mode=\"none\" tokens=\"3\">")
+            .contains("<file path=\"a.txt\" lang=\"text\" mode=\"strip\" tokens=\"3\">")
     );
 }
 
@@ -141,7 +141,7 @@ fn content_is_not_xml_escaped_except_a_closing_file_tag() {
 
     assert!(
         out.stdout
-            .contains("<file path=\"t.ts\" lang=\"typescript\" mode=\"none\" tokens=\""),
+            .contains("<file path=\"t.ts\" lang=\"typescript\" mode=\"strip\" tokens=\""),
         "{}",
         out.stdout
     );
@@ -192,7 +192,7 @@ fn the_report_table_goes_to_stderr_naming_each_file_and_the_bundle_total() {
     let total = bundle_tokens(&out.stdout);
     assert!(
         out.stderr
-            .contains(" src/lib.rs  rust  none  12B → 12B  3 → 3"),
+            .contains(" src/lib.rs  rust  strip*  12B → 12B  3 → 3"),
         "{}",
         out.stderr
     );
@@ -233,7 +233,7 @@ fn the_report_counts_bytes_as_read_not_as_decoded() {
     let out = run(dir.path(), &["a.txt"]);
 
     assert!(
-        out.stderr.contains(" a.txt  text  none  7B → "),
+        out.stderr.contains(" a.txt  text  strip*  7B → "),
         "{}",
         out.stderr
     );
@@ -257,7 +257,7 @@ fn markdown_format_emits_a_heading_and_fenced_block_per_file() {
     );
     assert!(
         out.stdout.ends_with(
-            "\n## src/lib.rs\n\nmode: none · tokens: 5\n\n```rust\npub fn a() {}\n```\n"
+            "\n## src/lib.rs\n\nmode: strip · tokens: 5\n\n```rust\npub fn a() {}\n```\n"
         ),
         "{}",
         out.stdout

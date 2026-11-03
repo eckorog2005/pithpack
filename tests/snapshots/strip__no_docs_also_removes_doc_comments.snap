@@ -1,0 +1,23 @@
+---
+source: tests/strip.rs
+expression: files(&out.stdout)
+---
+<file path="lib.rs" lang="rust" mode="strip" tokens="67">
+use std::fmt;
+
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Point {
+    pub fn sum(&self) -> i32 {
+        let total = self.x + self.y;
+        let s = "// not a comment";
+        total
+    }
+}
+
+fn helper() {}
+</file>
+</bundle>
