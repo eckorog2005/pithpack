@@ -161,11 +161,11 @@ fn stdin_is_compressed_only_when_its_language_is_given() {
 }
 
 #[test]
-fn go_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
-    let dir = fixture(&[("main.go", "package main // free\n")]);
+fn css_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
+    let dir = fixture(&[("main.css", "a { color: red } /* free */\n")]);
 
     for flag in ["-1", "-2"] {
-        let out = run(dir.path(), &["--no-tree", flag, "main.go"]);
+        let out = run(dir.path(), &["--no-tree", flag, "main.css"]);
 
         assert!(
             out.stdout
@@ -180,10 +180,10 @@ fn go_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
         );
         assert!(
             out.stdout
-                .contains("<file path=\"main.go\" lang=\"go\" mode=\"strip\"")
+                .contains("<file path=\"main.css\" lang=\"css\" mode=\"strip\"")
         );
         assert!(
-            out.stderr.contains(" main.go  go    strip*  "),
+            out.stderr.contains(" main.css  css   strip*  "),
             "{}",
             out.stderr
         );

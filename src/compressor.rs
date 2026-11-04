@@ -112,7 +112,15 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         }
         let body = node
             .child_by_field_name("body")
-            .filter(|_| matches!(node.kind(), "function_item" | "function_definition"))
+            .filter(|_| {
+                matches!(
+                    node.kind(),
+                    "function_item"
+                        | "function_definition"
+                        | "function_declaration"
+                        | "method_declaration"
+                )
+            })
             .and_then(|body| {
                 // A kept Python docstring stays as the first line of the collapsed body.
                 let start = match docstring(source, body).filter(|_| docs) {
@@ -154,7 +162,7 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         (ModeArg::Strip, None)
     } else if let Some(placeholder) = match lang {
         // `{ … }` alone is an ERROR node; the comment keeps the placeholder parseable.
-        Some(Language::Rust) => Some("{ /* … */ }"),
+        Some(Language::Rust | Language::Go) => Some("{ /* … */ }"),
         Some(Language::Python) => Some("..."),
         _ => None,
     } {
@@ -174,7 +182,7 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
         (ModeArg::Skeleton, fallback)
     } else {
-        // shortcut: only Rust and Python have skeleton; drop once #42–#48 land.
+        // shortcut: only Rust, Python and Go have skeleton; drop once #43–#48 land.
         (ModeArg::Strip, Some(Fallback::ModeNotBuilt))
     };
     Compressed {

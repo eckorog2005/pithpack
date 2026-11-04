@@ -98,6 +98,39 @@ async def fetch(url: str) -> List[str]:
 def one_liner(): return os.sep
 "#;
 
+const GO: &str = r#"// Package shapes has shapes.
+package shapes
+
+import "fmt"
+
+// Shape is a shape.
+type Shape struct {
+	Name string
+}
+
+type Namer interface {
+	Name() string
+}
+
+// Area returns the area.
+func (s Shape) Area() int {
+	// A Free Comment in a body.
+	size := 2
+	return size * size
+}
+
+func Describe(s Shape) string {
+	text := `multi
+line`
+	f := func() int {
+		return 1
+	}
+	return fmt.Sprint(text, f())
+}
+
+func Short() int { return 0 }
+"#;
+
 /// Every `skeleton`/`outline` output for a Full-support language must re-parse cleanly.
 fn assert_reparses(lang: Language, text: &str) {
     let tree = parser::parse(lang, text).unwrap();
@@ -158,6 +191,24 @@ fn python_skeleton_with_no_docs_leaves_bare_ellipsis_bodies() {
         out.text
     );
     assert_reparses(Language::Python, &out.text);
+}
+
+#[test]
+fn go_skeleton_collapses_function_and_method_bodies_keeping_types_and_docs() {
+    let out = compress(Some(Language::Go), GO, ModeArg::Skeleton, true);
+
+    assert_eq!(out.mode, ModeArg::Skeleton);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::Go, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn go_skeleton_with_no_docs_still_reparses() {
+    let out = compress(Some(Language::Go), GO, ModeArg::Skeleton, false);
+
+    assert!(!out.text.contains("Area returns"), "{}", out.text);
+    assert_reparses(Language::Go, &out.text);
 }
 
 #[test]

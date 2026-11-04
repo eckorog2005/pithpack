@@ -119,7 +119,7 @@ pub fn run(opts: Options, io: Io) -> anyhow::Result<Outcome> {
     let mut meta = BundleMeta {
         format: opts.format,
         // shortcut: labelled skeleton for outline, and files without skeleton are still strip (each
-        // `<file>` says which); label by request once #42–#48 land.
+        // `<file>` says which); label by request once #43–#48 land.
         mode: opts.mode.min(cli::ModeArg::Skeleton).name(),
         tokenizer: encoder.name(),
         tokens: 0,
