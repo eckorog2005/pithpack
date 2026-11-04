@@ -23,7 +23,7 @@ Bundling this repo's own `src/` (output of `pithpack src`; the Bundle goes to st
  bundle: 8,434 tokens (o200k_base) · 7 redactions · 522 ms
 ```
 
-The default Mode, `skeleton`, keeps declarations, signatures, types and Doc Comments, and collapses multi-line function bodies to `{ /* … */ }`. It is built for Rust so far; other languages get `strip` (remove Free Comments and redundant whitespace), marked `strip*` in the Report, and `outline` compresses as `skeleton`. See [`docs/SDD.md`](docs/SDD.md).
+The default Mode, `skeleton`, keeps declarations, signatures, types and Doc Comments, and collapses multi-line function bodies to `{ /* … */ }`. It is built for Rust and Python (bodies become `...`, after any docstring) so far; other languages get `strip` (remove Free Comments and redundant whitespace), marked `strip*` in the Report, and `outline` compresses as `skeleton`. See [`docs/SDD.md`](docs/SDD.md).
 
 ## Install
 

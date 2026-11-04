@@ -161,11 +161,11 @@ fn stdin_is_compressed_only_when_its_language_is_given() {
 }
 
 #[test]
-fn python_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
-    let dir = fixture(&[("main.py", "def a(): pass  # free\n")]);
+fn go_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
+    let dir = fixture(&[("main.go", "package main // free\n")]);
 
     for flag in ["-1", "-2"] {
-        let out = run(dir.path(), &["--no-tree", flag, "main.py"]);
+        let out = run(dir.path(), &["--no-tree", flag, "main.go"]);
 
         assert!(
             out.stdout
@@ -180,10 +180,10 @@ fn python_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() 
         );
         assert!(
             out.stdout
-                .contains("<file path=\"main.py\" lang=\"python\" mode=\"strip\"")
+                .contains("<file path=\"main.go\" lang=\"go\" mode=\"strip\"")
         );
         assert!(
-            out.stderr.contains(" main.py  python  strip*  "),
+            out.stderr.contains(" main.go  go    strip*  "),
             "{}",
             out.stderr
         );

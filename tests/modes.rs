@@ -58,6 +58,46 @@ const ORIGIN: Point = Point { x: 0, y: 0 };
 fn empty() {}
 ";
 
+const PYTHON: &str = r#"
+"""Module docstring survives."""
+import os
+from typing import List
+
+
+class Shape:
+    """A shape."""
+
+    sides = 0
+
+    def __init__(self, name):
+        """Build it."""
+        self.name = name
+        # A Free Comment in a body.
+        self.size = 0
+
+    def area(self):
+        return 0
+
+    @property
+    def label(self):
+        text = """multi   
+
+line"""
+        return text.strip()
+
+    def only_doc(self):
+        """Nothing else."""
+
+
+async def fetch(url: str) -> List[str]:
+    def inner():
+        return 1
+    return [url, str(inner())]
+
+
+def one_liner(): return os.sep
+"#;
+
 /// Every `skeleton`/`outline` output for a Full-support language must re-parse cleanly.
 fn assert_reparses(lang: Language, text: &str) {
     let tree = parser::parse(lang, text).unwrap();
@@ -89,6 +129,35 @@ fn rust_outline_gets_skeleton_until_built() {
     assert_eq!(out.mode, ModeArg::Skeleton);
     assert_eq!(out.fallback.map(|f| f.reason()), Some("mode_not_built"));
     assert_reparses(Language::Rust, &out.text);
+}
+
+#[test]
+fn python_skeleton_collapses_bodies_keeping_docstrings_first() {
+    let out = compress(Some(Language::Python), PYTHON, ModeArg::Skeleton, true);
+
+    assert_eq!(out.mode, ModeArg::Skeleton);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::Python, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn python_skeleton_with_no_docs_leaves_bare_ellipsis_bodies() {
+    let out = compress(Some(Language::Python), PYTHON, ModeArg::Skeleton, false);
+
+    assert!(!out.text.contains("Build it"), "{}", out.text);
+    assert!(
+        out.text.contains("    def only_doc(self):\n        ...\n"),
+        "{}",
+        out.text
+    );
+    assert!(
+        out.text
+            .contains("    def __init__(self, name):\n        ...\n"),
+        "{}",
+        out.text
+    );
+    assert_reparses(Language::Python, &out.text);
 }
 
 #[test]
