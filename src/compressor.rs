@@ -119,8 +119,15 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
                         | "function_definition"
                         | "function_declaration"
                         | "method_declaration"
+                        | "generator_function_declaration"
+                        | "function_expression"
+                        | "generator_function"
+                        | "arrow_function"
+                        | "method_definition"
                 )
             })
+            // `x => ({ … })` is an expression; swapping it for a block would change what it returns.
+            .filter(|body| node.kind() != "arrow_function" || body.kind() == "statement_block")
             .and_then(|body| {
                 // A kept Python docstring stays as the first line of the collapsed body.
                 let start = match docstring(source, body).filter(|_| docs) {
@@ -164,6 +171,9 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         // `{ … }` alone is an ERROR node; the comment keeps the placeholder parseable.
         Some(Language::Rust | Language::Go) => Some("{ /* … */ }"),
         Some(Language::Python) => Some("..."),
+        Some(Language::TypeScript | Language::Tsx | Language::JavaScript | Language::Jsx) => {
+            Some("{ … }")
+        }
         _ => None,
     } {
         // A dropped Python docstring starts its line, before its body, so it would win in `apply`.
@@ -182,7 +192,7 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
         (ModeArg::Skeleton, fallback)
     } else {
-        // shortcut: only Rust, Python and Go have skeleton; drop once #43–#48 land.
+        // shortcut: only Rust, Python, Go and TS/JS have skeleton; drop once #44–#48 land.
         (ModeArg::Strip, Some(Fallback::ModeNotBuilt))
     };
     Compressed {

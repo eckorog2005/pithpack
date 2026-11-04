@@ -1,0 +1,27 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+const fs = require("fs");
+
+/** A thing. */
+class Thing {
+  /** Build it. */
+  constructor(name) { … }
+
+  get label() { … }
+
+  static make() { … }
+}
+
+/** Run it. */
+function run(items) { … }
+
+const short = (a) => a + 1;
+
+const wrapped = (a) => ({
+  a,
+  b: 2,
+});
+
+module.exports = { Thing, run, short };

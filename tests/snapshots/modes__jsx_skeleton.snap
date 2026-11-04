@@ -1,0 +1,8 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+import React from "react";
+
+/** A card. */
+export const Card = ({ title }) => { … };

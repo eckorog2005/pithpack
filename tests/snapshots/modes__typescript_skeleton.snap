@@ -1,0 +1,32 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+import { readFile } from "fs";
+
+/** A shape. */
+export interface Shape {
+  area(): number;
+}
+
+export enum Color { Red, Green }
+
+export type Id = string | number;
+
+/** Base class. */
+export abstract class Base implements Shape {
+  /** The name. */
+  name: string = "base";
+
+  abstract area(): number;
+
+  /** Build it. */
+  constructor(name: string) { … }
+
+  describe(): string { … }
+
+  quick(): number { return 1; }
+}
+
+/** Fetch it. */
+export async function fetchAll(urls: string[]): Promise<string[]> { … }
