@@ -11,6 +11,7 @@ const MAX_ERROR_RATIO: f32 = 0.10;
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Fallback {
     ModeNotBuilt,
+    StripOnly,
     ParseErrors { ratio: f32 },
     PlainText,
 }
@@ -19,6 +20,7 @@ impl Fallback {
     pub fn reason(&self) -> &'static str {
         match self {
             Fallback::ModeNotBuilt => "mode_not_built",
+            Fallback::StripOnly => "strip_only",
             Fallback::ParseErrors { .. } => "parse_errors",
             Fallback::PlainText => "plain_text",
         }
@@ -27,6 +29,7 @@ impl Fallback {
     pub fn note(&self) -> &'static str {
         match self {
             Fallback::ModeNotBuilt => "Mode not built for this language yet",
+            Fallback::StripOnly => "strip is the only Mode for this language",
             Fallback::ParseErrors { .. } => "over 10% parse errors",
             Fallback::PlainText => "Plain Text: whitespace only",
         }
@@ -192,8 +195,7 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
         (ModeArg::Skeleton, fallback)
     } else {
-        // shortcut: only Rust, Python, Go and TS/JS have skeleton; drop once #44–#48 land.
-        (ModeArg::Strip, Some(Fallback::ModeNotBuilt))
+        (ModeArg::Strip, Some(Fallback::StripOnly))
     };
     Compressed {
         text: apply(source, edits, &literals),

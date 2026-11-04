@@ -189,7 +189,7 @@ fn css_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
         );
         assert!(
             out.stderr
-                .contains(" * Mode not built for this language yet\n"),
+                .contains(" * strip is the only Mode for this language\n"),
             "{}",
             out.stderr
         );

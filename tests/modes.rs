@@ -401,3 +401,37 @@ fn the_default_run_is_skeleton_and_labelled_so() {
         out.stderr
     );
 }
+
+fn file_blocks(bundle: &str) -> &str {
+    let start = bundle.find("<file ").unwrap();
+    &bundle[start..bundle.rfind("</bundle>").unwrap()]
+}
+
+#[test]
+fn html_and_css_fall_back_to_strip_with_a_strip_only_note() {
+    let dir = fixture(&[
+        ("a.html", "<!-- c -->\n<p>hi</p>\n"),
+        ("b.css", "/* c */\na { color: red; }\n"),
+    ]);
+
+    for name in ["a.html", "b.css"] {
+        let strip = run(dir.path(), &["-0", "--no-tree", name]).stdout;
+        for flag in ["-1", "-2"] {
+            let out = run(dir.path(), &[flag, "--no-tree", "--report", "json", name]);
+            let json: serde_json::Value = serde_json::from_str(&out.stderr).unwrap();
+            let file = &json["files"][0];
+            assert_eq!(file["effective_mode"], "strip", "{name} {flag}");
+            assert_eq!(file["fallback"]["reason"], "strip_only", "{name} {flag}");
+            assert_eq!(
+                file_blocks(&out.stdout),
+                file_blocks(&strip),
+                "{name} {flag}"
+            );
+        }
+        let table = run(dir.path(), &["-1", "--no-tree", name]).stderr;
+        assert!(
+            table.ends_with(" * strip is the only Mode for this language\n"),
+            "{table}"
+        );
+    }
+}
