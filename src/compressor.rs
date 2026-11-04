@@ -110,13 +110,12 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
             literals.push(node.byte_range());
             continue;
         }
-        if node.kind() == "function_item"
-            && let Some(body) = node.child_by_field_name("body")
-            && body.start_position().row != body.end_position().row
-        {
-            // A nested fn's body overlaps its parent's, and `apply` keeps only the outer edit.
-            bodies.push(body.byte_range());
-        }
+        let body = node
+            .child_by_field_name("body")
+            .filter(|_| node.kind() == "function_item")
+            .filter(|body| body.start_position().row != body.end_position().row);
+        // A nested fn's body overlaps its parent's, and `apply` keeps only the outer edit.
+        bodies.extend(body.map(|body| body.byte_range()));
         if node.is_error() && !in_error {
             error_bytes += node.byte_range().len();
         }
