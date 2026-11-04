@@ -112,10 +112,18 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         }
         let body = node
             .child_by_field_name("body")
-            .filter(|_| node.kind() == "function_item")
-            .filter(|body| body.start_position().row != body.end_position().row);
+            .filter(|_| matches!(node.kind(), "function_item" | "function_definition"))
+            .and_then(|body| {
+                // A kept Python docstring stays as the first line of the collapsed body.
+                let start = match docstring(source, body).filter(|_| docs) {
+                    Some((doc, _)) => doc.next_named_sibling()?,
+                    None => body,
+                };
+                (start.start_position().row != body.end_position().row)
+                    .then(|| start.start_byte()..body.end_byte())
+            });
         // A nested fn's body overlaps its parent's, and `apply` keeps only the outer edit.
-        bodies.extend(body.map(|body| body.byte_range()));
+        bodies.extend(body);
         if node.is_error() && !in_error {
             error_bytes += node.byte_range().len();
         }
@@ -144,9 +152,19 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         (ModeArg::Strip, Some(Fallback::ParseErrors { ratio }))
     } else if mode == ModeArg::Strip {
         (ModeArg::Strip, None)
-    } else if lang == Some(Language::Rust) {
+    } else if let Some(placeholder) = match lang {
         // `{ … }` alone is an ERROR node; the comment keeps the placeholder parseable.
-        edits.extend(bodies.iter().map(|body| (body.clone(), "{ /* … */ }")));
+        Some(Language::Rust) => Some("{ /* … */ }"),
+        Some(Language::Python) => Some("..."),
+        _ => None,
+    } {
+        // A dropped Python docstring starts its line, before its body, so it would win in `apply`.
+        edits.retain(|(range, _)| {
+            !bodies
+                .iter()
+                .any(|body| range.start < body.end && body.start < range.end)
+        });
+        edits.extend(bodies.iter().map(|body| (body.clone(), placeholder)));
         literals.retain(|literal| {
             !bodies
                 .iter()
@@ -156,7 +174,7 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
         (ModeArg::Skeleton, fallback)
     } else {
-        // shortcut: only Rust has skeleton; drop once #41–#48 land.
+        // shortcut: only Rust and Python have skeleton; drop once #42–#48 land.
         (ModeArg::Strip, Some(Fallback::ModeNotBuilt))
     };
     Compressed {

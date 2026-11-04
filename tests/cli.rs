@@ -159,8 +159,8 @@ fn an_unknown_lang_is_a_usage_error() {
 }
 
 #[test]
-fn every_mode_flag_compresses_python_as_strip_and_is_labelled_so() {
-    let dir = fixture(&[("a.py", "# c\ndef a(): pass\n")]);
+fn every_mode_flag_compresses_go_as_strip_and_is_labelled_so() {
+    let dir = fixture(&[("a.go", "// a comment\n\npackage pkg\n")]);
     let home = tempfile::tempdir().unwrap();
 
     for flags in [
@@ -175,12 +175,12 @@ fn every_mode_flag_compresses_python_as_strip_and_is_labelled_so() {
     ] {
         pithpack(dir.path(), home.path())
             .args(flags)
-            .arg("a.py")
+            .arg("a.go")
             .assert()
             .code(0)
             .stdout(
-                predicate::str::contains("lang=\"python\" mode=\"strip\" tokens=\"")
-                    .and(predicate::str::contains("# c").not())
+                predicate::str::contains("lang=\"go\" mode=\"strip\" tokens=\"")
+                    .and(predicate::str::contains("// a comment").not())
                     .and(predicate::str::contains("mode=\"outline\"").not()),
             )
             .stderr(predicate::str::contains(" strip").and(predicate::str::contains("0.0%").not()));
