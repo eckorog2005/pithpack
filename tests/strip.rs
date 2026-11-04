@@ -161,11 +161,11 @@ fn stdin_is_compressed_only_when_its_language_is_given() {
 }
 
 #[test]
-fn skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
-    let dir = fixture(&[("lib.rs", "fn a() {} // free\n")]);
+fn python_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
+    let dir = fixture(&[("main.py", "def a(): pass  # free\n")]);
 
     for flag in ["-1", "-2"] {
-        let out = run(dir.path(), &["--no-tree", flag, "lib.rs"]);
+        let out = run(dir.path(), &["--no-tree", flag, "main.py"]);
 
         assert!(
             out.stdout
@@ -174,22 +174,22 @@ fn skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
             out.stdout
         );
         assert!(
-            out.stdout.contains(" mode=\"strip\" tokenizer="),
+            out.stdout.contains(" mode=\"skeleton\" tokenizer="),
             "{}",
             out.stdout
         );
         assert!(
             out.stdout
-                .contains("<file path=\"lib.rs\" lang=\"rust\" mode=\"strip\"")
+                .contains("<file path=\"main.py\" lang=\"python\" mode=\"strip\"")
         );
         assert!(
-            out.stderr.contains(" lib.rs  rust  strip*  "),
+            out.stderr.contains(" main.py  python  strip*  "),
             "{}",
             out.stderr
         );
         assert!(
             out.stderr
-                .contains(" * skeleton and outline are not built yet\n"),
+                .contains(" * Mode not built for this language yet\n"),
             "{}",
             out.stderr
         );

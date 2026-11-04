@@ -26,7 +26,7 @@ impl Fallback {
 
     pub fn note(&self) -> &'static str {
         match self {
-            Fallback::ModeNotBuilt => "skeleton and outline are not built yet",
+            Fallback::ModeNotBuilt => "Mode not built for this language yet",
             Fallback::ParseErrors { .. } => "over 10% parse errors",
             Fallback::PlainText => "Plain Text: whitespace only",
         }
@@ -49,6 +49,7 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
     };
     let mut edits = Vec::new();
     let mut literals = Vec::new();
+    let mut bodies = Vec::new();
     let mut error_bytes = 0;
     let mut stack = vec![(tree.root_node(), false)];
     while let Some((node, in_error)) = stack.pop() {
@@ -109,6 +110,13 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
             literals.push(node.byte_range());
             continue;
         }
+        if node.kind() == "function_item"
+            && let Some(body) = node.child_by_field_name("body")
+            && body.start_position().row != body.end_position().row
+        {
+            // A nested fn's body overlaps its parent's, and `apply` keeps only the outer edit.
+            bodies.push(body.byte_range());
+        }
         if node.is_error() && !in_error {
             error_bytes += node.byte_range().len();
         }
@@ -133,17 +141,28 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         );
     }
     let ratio = error_bytes as f32 / source.len().max(1) as f32;
-    let fallback = if ratio > MAX_ERROR_RATIO {
-        Some(Fallback::ParseErrors { ratio })
-    } else if mode > ModeArg::Strip {
-        // shortcut: skeleton and outline aren't built, so they get strip; drop once #40–#48 land.
-        Some(Fallback::ModeNotBuilt)
+    let (mode, fallback) = if ratio > MAX_ERROR_RATIO {
+        (ModeArg::Strip, Some(Fallback::ParseErrors { ratio }))
+    } else if mode == ModeArg::Strip {
+        (ModeArg::Strip, None)
+    } else if lang == Some(Language::Rust) {
+        // `{ … }` alone is an ERROR node; the comment keeps the placeholder parseable.
+        edits.extend(bodies.iter().map(|body| (body.clone(), "{ /* … */ }")));
+        literals.retain(|literal| {
+            !bodies
+                .iter()
+                .any(|body| body.start <= literal.start && literal.end <= body.end)
+        });
+        // shortcut: outline isn't built, so it gets skeleton; drop once #45–#48 land.
+        let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
+        (ModeArg::Skeleton, fallback)
     } else {
-        None
+        // shortcut: only Rust has skeleton; drop once #41–#48 land.
+        (ModeArg::Strip, Some(Fallback::ModeNotBuilt))
     };
     Compressed {
         text: apply(source, edits, &literals),
-        mode: ModeArg::Strip,
+        mode,
         fallback,
     }
 }

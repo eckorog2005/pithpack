@@ -366,7 +366,7 @@ pub fn resolve(cli: CliArgs, env: &Env) -> Result<Options, ConfigError> {
 
 const INIT_TEMPLATE: &str = r#"# pithpack.toml: every key is optional; values shown are the defaults.
 # CLI flags override this file, which overrides the user config.
-# `skeleton` and `outline` compress as `strip` until they are built.
+# `skeleton` covers Rust only so far, and `outline` compresses as `skeleton` until it is built.
 
 mode            = "skeleton"   # "strip" | "skeleton" | "outline"
 format          = "xml"        # "xml" | "markdown"

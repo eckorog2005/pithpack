@@ -76,7 +76,7 @@ pub struct CliArgs {
     #[arg(short, long, value_enum)]
     pub format: Option<Format>,
 
-    /// Mode; `skeleton` and `outline` compress as `strip` until they are built [default: skeleton]
+    /// Mode; `skeleton` is Rust-only and `outline` compresses as `skeleton` until built [default: skeleton]
     #[arg(
         short,
         long,

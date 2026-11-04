@@ -12,7 +12,7 @@ fn bundles_a_directory_into_file_blocks_carrying_token_counts() {
     let (header, body) = out.stdout.split_once('\n').unwrap();
     assert!(
         header.starts_with(&format!(
-            "<bundle tool=\"pithpack\" version=\"{}\" mode=\"strip\" tokenizer=\"o200k_base\" files=\"1\" tokens=\"",
+            "<bundle tool=\"pithpack\" version=\"{}\" mode=\"skeleton\" tokenizer=\"o200k_base\" files=\"1\" tokens=\"",
             env!("CARGO_PKG_VERSION")
         )),
         "{header}"
@@ -257,7 +257,7 @@ fn markdown_format_emits_a_heading_and_fenced_block_per_file() {
     );
     assert!(
         out.stdout.ends_with(
-            "\n## src/lib.rs\n\nmode: strip · tokens: 5\n\n```rust\npub fn a() {}\n```\n"
+            "\n## src/lib.rs\n\nmode: skeleton · tokens: 5\n\n```rust\npub fn a() {}\n```\n"
         ),
         "{}",
         out.stdout

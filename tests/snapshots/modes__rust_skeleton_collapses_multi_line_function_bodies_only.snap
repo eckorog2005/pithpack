@@ -1,0 +1,42 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+//! Crate docs survive.
+use std::fmt;
+
+/// A point.
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
+
+pub enum Shape {
+    Dot(Point),
+    Line { from: Point, to: Point },
+}
+
+pub trait Area {
+    fn area(&self) -> f64;
+
+    /// Default bodies collapse too.
+    fn doubled(&self) -> f64 { /* … */ }
+}
+
+impl Point {
+    /// Kept on one line.
+    pub fn x(&self) -> i32 { self.x }
+
+    pub fn sum(&self) -> i32 { /* … */ }
+}
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    where
+        Self: Sized,
+    { /* … */ }
+}
+
+const ORIGIN: Point = Point { x: 0, y: 0 };
+
+fn empty() {}
