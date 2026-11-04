@@ -32,7 +32,7 @@ Developers feeding code to LLMs pay for every token, and raw source is padded wi
 
 | # | Decision |
 |---|---|
-| D1 | Rust (edition 2024, MSRV 1.85), single binary crate, internal modules. |
+| D1 | Rust (edition 2024, MSRV 1.90), single binary crate, internal modules. |
 | D2 | "Zero-dependency" means zero *runtime* dependencies; binary size (~15–25 MB) is the accepted cost. |
 | D3 | Modes are `strip` (0), `skeleton` (1, default), `outline` (2); `-0/-1/-2` are aliases. |
 | D4 | Doc Comments survive every Mode; only Free Comments are stripped ([ADR-0001](adr/0001-doc-comments-survive-every-mode.md)). `--no-docs` drops Doc Comments too. |
@@ -617,7 +617,7 @@ The clipboard is tested behind a `PITHPACK_CLIPBOARD=file:<path>` test hook so C
 - **License**: `MIT`.
 - **Merging**: squash only; the PR title (Conventional Commits) and body become the commit on `main`; branches are deleted on merge.
 - **Ruleset on `main`**: PR required (0 approvals while there is a single maintainer; raise to 1 when a second joins), conversations resolved, required status check `ci-ok` with branch up to date, linear history, no force pushes, no deletion, no bypass actors.
-- **CI (`ci.yml`)**: `fmt`, `clippy -D warnings`, `test` (ubuntu, macOS arm64, Windows, via `cargo nextest`) plus doctests, `msrv` (Rust 1.85), `deny` (`cargo-deny`), `pr-title` (semantic PR title). `ci-ok` aggregates them and is the only required check, so jobs can change without editing the ruleset.
+- **CI (`ci.yml`)**: `fmt`, `clippy -D warnings`, `test` (ubuntu, macOS arm64, Windows, via `cargo nextest`) plus doctests, `msrv` (Rust 1.90), `deny` (`cargo-deny`), `pr-title` (semantic PR title). `ci-ok` aggregates them and is the only required check, so jobs can change without editing the ruleset.
 - **Supply chain**: every action pinned to a full commit SHA; Dependabot weekly for `cargo` and `github-actions`, minor and patch updates grouped.
 - **Releases**: `cargo-dist` generates `release.yml` when the first release is cut (Phase 2). Targets: `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc`. Installers: shell, PowerShell, Homebrew tap; `cargo install pithpack`.
 
@@ -650,7 +650,7 @@ Two deliberate changes from the original brief: Redaction moves from Phase 3 to 
 
 | Risk | Mitigation |
 |---|---|
-| Grammar crates require a newer rustc than MSRV 1.85 | `msrv` job catches it; bump MSRV deliberately in its own PR |
+| Grammar crates require a newer rustc than MSRV 1.90 | `msrv` job catches it; bump MSRV deliberately in its own PR |
 | Redaction false negatives | extensible patterns, a corpus-based test suite, and Exclusion as the primary defence |
 | Redaction false positives make code unreadable | typed markers keep the meaning; entropy threshold on generic assignments |
 | tree-sitter grammar ABI drift between crates | pin grammar versions together; Dependabot groups them; snapshots catch output changes |
