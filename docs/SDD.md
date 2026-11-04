@@ -438,7 +438,8 @@ pub fn compress_plain(text: &str) -> Compressed;   // Plain Text path
 
 | Language | Placeholder |
 |---|---|
-| Rust, Go, TS/JS | `{ … }` |
+| Rust | `{ /* … */ }` (`{ … }` alone is an ERROR node) |
+| Go, TS/JS | `{ … }` |
 | Python | `...` (Doc Comment, if kept, stays as the first line of the body) |
 
 Only function and method bodies are collapsed. Containers (`impl`, `class`, `struct`, `interface`, `trait`, `enum`, Go `type … struct`) are kept, with their methods' bodies collapsed individually. Imports are kept.

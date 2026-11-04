@@ -118,8 +118,9 @@ pub fn run(opts: Options, io: Io) -> anyhow::Result<Outcome> {
         .collect();
     let mut meta = BundleMeta {
         format: opts.format,
-        // shortcut: only strip exists, so every file lands there; label by request once skeleton does.
-        mode: opts.mode.min(cli::ModeArg::Strip).name(),
+        // shortcut: labelled skeleton for outline, and non-Rust files under it are still strip (each
+        // `<file>` says which); label by request once #41–#48 land.
+        mode: opts.mode.min(cli::ModeArg::Skeleton).name(),
         tokenizer: encoder.name(),
         tokens: 0,
         tree: opts.tree,
