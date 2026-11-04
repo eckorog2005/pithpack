@@ -1,0 +1,24 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+// Package shapes has shapes.
+package shapes
+
+import "fmt"
+
+// Shape is a shape.
+type Shape struct {
+	Name string
+}
+
+type Namer interface {
+	Name() string
+}
+
+// Area returns the area.
+func (s Shape) Area() int { /* … */ }
+
+func Describe(s Shape) string { /* … */ }
+
+func Short() int { return 0 }
