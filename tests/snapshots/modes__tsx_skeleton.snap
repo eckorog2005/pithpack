@@ -1,0 +1,13 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+import React from "react";
+
+/** Props. */
+interface Props {
+  label: string;
+}
+
+/** A button. */
+export function Button({ label }: Props) { … }

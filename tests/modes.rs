@@ -131,6 +131,129 @@ line`
 func Short() int { return 0 }
 "#;
 
+const TYPESCRIPT: &str = r#"
+import { readFile } from "fs";
+
+/** A shape. */
+export interface Shape {
+  area(): number;
+}
+
+export enum Color { Red, Green }
+
+export type Id = string | number;
+
+/** Base class. */
+export abstract class Base implements Shape {
+  /** The name. */
+  name: string = "base";
+
+  abstract area(): number;
+
+  /** Build it. */
+  constructor(name: string) {
+    // A Free Comment in a body.
+    this.name = name;
+    this.touch();
+  }
+
+  describe(): string {
+    return `multi
+line ${this.name}`;
+  }
+
+  quick(): number { return 1; }
+}
+
+/** Fetch it. */
+export async function fetchAll(urls: string[]): Promise<string[]> {
+  const inner = () => {
+    return urls.length;
+  };
+  const arrow = (x: number) => x + 1;
+  return urls.map((u) => {
+    return u + inner() + arrow(1);
+  });
+}
+"#;
+
+const TSX: &str = r#"
+import React from "react";
+
+/** Props. */
+interface Props {
+  label: string;
+}
+
+/** A button. */
+export function Button({ label }: Props) {
+  const handle = () => {
+    console.log(label);
+    return 1;
+  };
+  return (
+    <button onClick={handle}>
+      {/* A Free Comment in markup. */}
+      {label}
+    </button>
+  );
+}
+"#;
+
+const JAVASCRIPT: &str = r#"
+const fs = require("fs");
+
+/** A thing. */
+class Thing {
+  /** Build it. */
+  constructor(name) {
+    // A Free Comment in a body.
+    this.name = name;
+    this.size = 0;
+  }
+
+  get label() {
+    return this.name;
+  }
+
+  static make() {
+    return new Thing("x");
+  }
+}
+
+/** Run it. */
+function run(items) {
+  const doubled = items.map(function (item) {
+    return item * 2;
+  });
+  return doubled;
+}
+
+const short = (a) => a + 1;
+
+const wrapped = (a) => ({
+  a,
+  b: 2,
+});
+
+module.exports = { Thing, run, short };
+"#;
+
+const JSX: &str = r#"
+import React from "react";
+
+/** A card. */
+export const Card = ({ title }) => {
+  const upper = title.toUpperCase();
+  return (
+    <div>
+      {/* A Free Comment in markup. */}
+      <h1>{upper}</h1>
+    </div>
+  );
+};
+"#;
+
 /// Every `skeleton`/`outline` output for a Full-support language must re-parse cleanly.
 fn assert_reparses(lang: Language, text: &str) {
     let tree = parser::parse(lang, text).unwrap();
@@ -209,6 +332,38 @@ fn go_skeleton_with_no_docs_still_reparses() {
 
     assert!(!out.text.contains("Area returns"), "{}", out.text);
     assert_reparses(Language::Go, &out.text);
+}
+
+#[test]
+fn ts_and_js_skeletons_collapse_bodies_keeping_declarations_and_jsdoc() {
+    for (name, lang, source) in [
+        ("typescript", Language::TypeScript, TYPESCRIPT),
+        ("tsx", Language::Tsx, TSX),
+        ("javascript", Language::JavaScript, JAVASCRIPT),
+        ("jsx", Language::Jsx, JSX),
+    ] {
+        let out = compress(Some(lang), source, ModeArg::Skeleton, true);
+
+        assert_eq!(out.mode, ModeArg::Skeleton, "{name}");
+        assert_eq!(out.fallback, None, "{name}");
+        assert_reparses(lang, &out.text);
+        insta::assert_snapshot!(format!("{name}_skeleton"), out.text);
+    }
+}
+
+#[test]
+fn ts_and_js_skeletons_with_no_docs_still_reparse() {
+    for (lang, source) in [
+        (Language::TypeScript, TYPESCRIPT),
+        (Language::Tsx, TSX),
+        (Language::JavaScript, JAVASCRIPT),
+        (Language::Jsx, JSX),
+    ] {
+        let out = compress(Some(lang), source, ModeArg::Skeleton, false);
+
+        assert!(!out.text.contains("/**"), "{}", out.text);
+        assert_reparses(lang, &out.text);
+    }
 }
 
 #[test]
