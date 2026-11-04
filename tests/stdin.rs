@@ -80,7 +80,7 @@ fn lang_labels_stdin_in_the_bundle_and_the_report() {
 
     assert!(
         out.stdout
-            .contains("<file path=\"&lt;stdin&gt;\" lang=\"python\" mode=\"strip\" "),
+            .contains("<file path=\"&lt;stdin&gt;\" lang=\"python\" mode=\"skeleton\" "),
         "{}",
         out.stdout
     );
@@ -91,7 +91,7 @@ fn lang_labels_stdin_in_the_bundle_and_the_report() {
         out.stdout
     );
     assert!(
-        out.stderr.contains(" <stdin>  python  strip* "),
+        out.stderr.contains(" <stdin>  python  skeleton "),
         "{}",
         out.stderr
     );

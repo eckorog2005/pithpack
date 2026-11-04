@@ -37,7 +37,7 @@ fn group_thousands(n: usize) -> String {
     let digits = n.to_string();
     let mut out = String::new();
     for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(c);
@@ -118,8 +118,8 @@ pub fn run(opts: Options, io: Io) -> anyhow::Result<Outcome> {
         .collect();
     let mut meta = BundleMeta {
         format: opts.format,
-        // shortcut: labelled skeleton for outline, and non-Rust files under it are still strip (each
-        // `<file>` says which); label by request once #41–#48 land.
+        // shortcut: labelled skeleton for outline, and files without skeleton are still strip (each
+        // `<file>` says which); label by request once #44–#48 land.
         mode: opts.mode.min(cli::ModeArg::Skeleton).name(),
         tokenizer: encoder.name(),
         tokens: 0,

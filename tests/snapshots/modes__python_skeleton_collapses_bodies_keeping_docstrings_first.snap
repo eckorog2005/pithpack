@@ -1,0 +1,32 @@
+---
+source: tests/modes.rs
+assertion_line: 141
+expression: out.text
+---
+"""Module docstring survives."""
+import os
+from typing import List
+
+class Shape:
+    """A shape."""
+
+    sides = 0
+
+    def __init__(self, name):
+        """Build it."""
+        ...
+
+    def area(self):
+        return 0
+
+    @property
+    def label(self):
+        ...
+
+    def only_doc(self):
+        """Nothing else."""
+
+async def fetch(url: str) -> List[str]:
+    ...
+
+def one_liner(): return os.sep

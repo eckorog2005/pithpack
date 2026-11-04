@@ -141,7 +141,7 @@ fn content_is_not_xml_escaped_except_a_closing_file_tag() {
 
     assert!(
         out.stdout
-            .contains("<file path=\"t.ts\" lang=\"typescript\" mode=\"strip\" tokens=\""),
+            .contains("<file path=\"t.ts\" lang=\"typescript\" mode=\"skeleton\" tokens=\""),
         "{}",
         out.stdout
     );
