@@ -45,3 +45,7 @@ assert_cmd = "2.2.2"
 insta = "1.49.0"
 predicates = "3.1.4"
 tempfile = "3.27.0"
+
+[[example]]
+name = "gen_fixture"
+path = "benches/gen_fixture.rs"
