@@ -191,26 +191,15 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
                 .iter()
                 .any(|body| body.start <= literal.start && literal.end <= body.end)
         });
-        if mode == ModeArg::Outline && lang == Some(Language::Rust) {
-            for item in rust_private_items(tree.root_node(), source) {
-                let (range, glue) = removal(source, item.clone());
-                edits.retain(|(edit, _)| !(edit.start < range.end && range.start < edit.end));
-                edits.push((range, glue));
-                literals
-                    .retain(|literal| !(item.start <= literal.start && literal.end <= item.end));
-            }
-            (ModeArg::Outline, None)
-        } else if mode == ModeArg::Outline && lang == Some(Language::Python) {
-            for item in python_private_items(tree.root_node(), source) {
-                let (range, glue) = removal(source, item.clone());
-                edits.retain(|(edit, _)| !(edit.start < range.end && range.start < edit.end));
-                edits.push((range, glue));
-                literals
-                    .retain(|literal| !(item.start <= literal.start && literal.end <= item.end));
-            }
-            (ModeArg::Outline, None)
-        } else if mode == ModeArg::Outline && lang == Some(Language::Go) {
-            for item in go_private_items(tree.root_node(), source) {
+        let private_items = match lang {
+            Some(Language::Rust) => Some(rust_private_items as fn(Node, &str) -> Vec<Range<usize>>),
+            Some(Language::Python) => Some(python_private_items as _),
+            Some(Language::Go) => Some(go_private_items as _),
+            _ => None,
+        }
+        .filter(|_| mode == ModeArg::Outline);
+        if let Some(private_items) = private_items {
+            for item in private_items(tree.root_node(), source) {
                 let (range, glue) = removal(source, item.clone());
                 edits.retain(|(edit, _)| !(edit.start < range.end && range.start < edit.end));
                 edits.push((range, glue));
