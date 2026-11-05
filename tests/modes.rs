@@ -517,6 +517,72 @@ fn rust_outline_with_no_docs_still_reparses() {
     assert_reparses(Language::Rust, &out.text);
 }
 
+const PYTHON_OUTLINE: &str = "\
+\"\"\"Module docs.\"\"\"
+import os
+from pkg import helper, _hidden
+from pkg import extra as shown
+
+VERSION = 1
+_cache = {}
+
+
+def api(x):
+    \"\"\"Public.\"\"\"
+    return x + 1
+
+
+def _private():
+    return 2
+
+
+@decorate
+class Thing:
+    def method(self):
+        return 3
+
+
+@decorate
+class _Hidden:
+    pass
+";
+
+#[test]
+fn python_outline_without_all_keeps_public_names_and_drops_imports() {
+    let out = compress(
+        Some(Language::Python),
+        PYTHON_OUTLINE,
+        ModeArg::Outline,
+        true,
+    );
+
+    assert_eq!(out.mode, ModeArg::Outline);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::Python, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn python_outline_with_all_keeps_only_listed_names_and_re_imports() {
+    let source = format!("{PYTHON_OUTLINE}\n__all__ = [\"_private\", \"VERSION\", \"shown\"]\n");
+    let out = compress(Some(Language::Python), &source, ModeArg::Outline, true);
+
+    assert_reparses(Language::Python, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn python_outline_with_no_docs_still_reparses() {
+    let out = compress(
+        Some(Language::Python),
+        PYTHON_OUTLINE,
+        ModeArg::Outline,
+        false,
+    );
+
+    assert_reparses(Language::Python, &out.text);
+}
+
 #[test]
 fn outline_for_the_other_languages_still_gets_skeleton_until_built() {
     let out = compress(Some(Language::Go), "package a\n", ModeArg::Outline, true);

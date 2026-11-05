@@ -200,8 +200,17 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
                     .retain(|literal| !(item.start <= literal.start && literal.end <= item.end));
             }
             (ModeArg::Outline, None)
+        } else if mode == ModeArg::Outline && lang == Some(Language::Python) {
+            for item in python_private_items(tree.root_node(), source) {
+                let (range, glue) = removal(source, item.clone());
+                edits.retain(|(edit, _)| !(edit.start < range.end && range.start < edit.end));
+                edits.push((range, glue));
+                literals
+                    .retain(|literal| !(item.start <= literal.start && literal.end <= item.end));
+            }
+            (ModeArg::Outline, None)
         } else {
-            // shortcut: outline isn't built for these, so it gets skeleton; drop once #46–#48 land.
+            // shortcut: outline isn't built for these, so it gets skeleton; drop once #47–#48 land.
             let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
             (ModeArg::Skeleton, fallback)
         }
@@ -289,6 +298,79 @@ fn rust_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
         }
     }
     dropped
+}
+
+fn python_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
+    let mut cursor = root.walk();
+    let statements: Vec<Node> = root.named_children(&mut cursor).collect();
+    fn assignment(stmt: Node) -> Option<Node> {
+        let node = stmt
+            .named_child(0)
+            .filter(|_| stmt.kind() == "expression_statement")?;
+        matches!(node.kind(), "assignment" | "augmented_assignment").then_some(node)
+    }
+    let is_all_assignment = |node: Node| {
+        node.child_by_field_name("left")
+            .is_some_and(|left| &source[left.byte_range()] == "__all__")
+    };
+    let mut exported: Option<Vec<&str>> = None;
+    for stmt in &statements {
+        let Some(node) = assignment(*stmt).filter(|node| is_all_assignment(*node)) else {
+            continue;
+        };
+        let names = exported.get_or_insert_default();
+        let Some(list) = node.child_by_field_name("right") else {
+            continue;
+        };
+        let mut cursor = list.walk();
+        for string in list
+            .named_children(&mut cursor)
+            .filter(|n| n.kind() == "string")
+        {
+            let mut cursor = string.walk();
+            names.extend(
+                string
+                    .named_children(&mut cursor)
+                    .filter(|part| part.kind() == "string_content")
+                    .map(|part| &source[part.byte_range()]),
+            );
+        }
+    }
+    let public = |name: &str| match &exported {
+        Some(all) => name == "__all__" || all.contains(&name),
+        None => !name.starts_with('_'),
+    };
+    let bound_names = |import: Node| {
+        let mut cursor = import.walk();
+        import
+            .children_by_field_name("name", &mut cursor)
+            .map(|name| {
+                let name = name.child_by_field_name("alias").unwrap_or(name);
+                source[name.byte_range()]
+                    .split('.')
+                    .next()
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<&str>>()
+    };
+    statements
+        .into_iter()
+        .filter(|stmt| match stmt.kind() {
+            "function_definition" | "class_definition" | "decorated_definition" => stmt
+                .child_by_field_name("definition")
+                .unwrap_or(*stmt)
+                .child_by_field_name("name")
+                .is_some_and(|name| !public(&source[name.byte_range()])),
+            "import_statement" | "import_from_statement" => {
+                exported.is_none() || !bound_names(*stmt).iter().any(|name| public(name))
+            }
+            _ => assignment(*stmt)
+                .and_then(|node| node.child_by_field_name("left"))
+                .filter(|left| left.kind() == "identifier")
+                .is_some_and(|left| !public(&source[left.byte_range()])),
+        })
+        .map(|stmt| stmt.byte_range())
+        .collect()
 }
 
 // shortcut: Python node kinds in the shared walk; move them to `@comment.doc` queries

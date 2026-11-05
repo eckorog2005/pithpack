@@ -1,0 +1,16 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+"""Module docs."""
+
+VERSION = 1
+
+def api(x):
+    """Public."""
+    return x + 1
+
+@decorate
+class Thing:
+    def method(self):
+        return 3
