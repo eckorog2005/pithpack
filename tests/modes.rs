@@ -879,3 +879,21 @@ fn rust_outline_drops_private_union_fields() {
 
     assert_eq!(out.text, "pub union U {\n    pub a: u32,\n}\n");
 }
+
+#[test]
+fn two_runs_over_the_same_input_give_byte_identical_bundles_in_every_mode() {
+    let dir = fixture(&[
+        ("src/lib.rs", RUST),
+        ("src/b.py", "def f():\n    return 1\n"),
+        ("src/a.go", "package a\n\nfunc F() int { return 1 }\n"),
+        ("web/app.ts", "export function f(): number { return 1 }\n"),
+        ("notes.txt", "plain\n"),
+    ]);
+    for mode in ["strip", "skeleton", "outline"] {
+        let first = run(dir.path(), &[".", "--mode", mode]);
+        let second = run(dir.path(), &[".", "--mode", mode]);
+
+        assert!(first.outcome.is_ok(), "{mode}");
+        assert_eq!(first.stdout, second.stdout, "{mode}");
+    }
+}
