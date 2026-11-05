@@ -9,10 +9,12 @@ pub mod report;
 pub mod scanner;
 pub mod sink;
 
+use std::borrow::Cow;
 use std::io::{Read, Write};
 use std::time::Instant;
 
 use anyhow::Context;
+use rayon::prelude::*;
 
 use config::Options;
 use encoder::Encoder;
@@ -31,6 +33,14 @@ pub struct Io<'a> {
 pub enum Outcome {
     Ok,
     OverBudget,
+}
+
+struct Processed {
+    read_bytes: u64,
+    redactions: usize,
+    lang: Option<parser::Language>,
+    text: String,
+    compressed: compressor::Compressed,
 }
 
 fn group_thousands(n: usize) -> String {
@@ -64,56 +74,63 @@ pub fn run(opts: Options, io: Io) -> anyhow::Result<Outcome> {
                 .context("cannot write a warning to stderr")?;
         }
     }
-    let mut texts = Vec::with_capacity(scan.candidates.len());
-    let mut read_bytes = Vec::with_capacity(scan.candidates.len());
-    let mut redactions = Vec::with_capacity(scan.candidates.len());
-    for candidate in &scan.candidates {
-        let bytes = if candidate.origin == Origin::Stdin {
-            let mut bytes = Vec::new();
-            io.stdin
-                .read_to_end(&mut bytes)
-                .context("cannot read stdin")?;
-            bytes
-        } else {
-            std::fs::read(&candidate.path)
-                .with_context(|| format!("cannot read `{}`", candidate.display))?
-        };
-        read_bytes.push(bytes.len() as u64);
-        let raw = String::from_utf8_lossy(&bytes);
-        if opts.redact {
-            let redacted = redact::redact(&raw, &rules);
-            redactions.push(redacted.hits.len());
-            texts.push(redacted.text.into_owned());
-        } else {
-            redactions.push(0);
-            texts.push(raw.into_owned());
-        }
+    let mut stdin_bytes = None;
+    if scan.candidates.iter().any(|c| c.origin == Origin::Stdin) {
+        let mut bytes = Vec::new();
+        io.stdin
+            .read_to_end(&mut bytes)
+            .context("cannot read stdin")?;
+        stdin_bytes = Some(bytes);
     }
-    let langs: Vec<_> = scan
+    let processed: Vec<anyhow::Result<Processed>> = scan
         .candidates
-        .iter()
-        .map(|c| match c.origin {
-            Origin::Stdin => opts.stdin_lang,
-            Origin::Explicit | Origin::Walked => parser::detect(&c.display),
+        .par_iter()
+        .map(|candidate| {
+            let bytes = match (&candidate.origin, &stdin_bytes) {
+                (Origin::Stdin, Some(bytes)) => Cow::Borrowed(bytes.as_slice()),
+                _ => Cow::Owned(
+                    std::fs::read(&candidate.path)
+                        .with_context(|| format!("cannot read `{}`", candidate.display))?,
+                ),
+            };
+            let raw = String::from_utf8_lossy(&bytes);
+            let (text, redactions) = if opts.redact {
+                let redacted = redact::redact(&raw, &rules);
+                (redacted.text.into_owned(), redacted.hits.len())
+            } else {
+                (raw.into_owned(), 0)
+            };
+            let lang = match candidate.origin {
+                Origin::Stdin => opts.stdin_lang,
+                Origin::Explicit | Origin::Walked => parser::detect(&candidate.display),
+            };
+            let compressed = compressor::compress(lang, &text, opts.mode, opts.docs);
+            Ok(Processed {
+                read_bytes: bytes.len() as u64,
+                redactions,
+                lang,
+                text,
+                compressed,
+            })
         })
         .collect();
-    let compressed: Vec<_> = texts
-        .iter()
-        .zip(&langs)
-        .map(|(text, &lang)| compressor::compress(lang, text, opts.mode, opts.docs))
-        .collect();
+    let processed = processed.into_iter().collect::<anyhow::Result<Vec<_>>>()?;
     let encoder = warm.join().expect("encoder initialisation panicked");
+    let tokens: Vec<usize> = processed
+        .par_iter()
+        .map(|p| encoder.count(&p.compressed.text))
+        .collect();
     let blocks: Vec<FileBlock> = scan
         .candidates
         .iter()
-        .zip(&langs)
-        .zip(&compressed)
-        .map(|((c, &lang), out)| FileBlock {
+        .zip(&processed)
+        .zip(&tokens)
+        .map(|((c, p), &tokens)| FileBlock {
             display: &c.display,
-            lang,
-            mode: out.mode.name(),
-            tokens: encoder.count(&out.text),
-            text: &out.text,
+            lang: p.lang,
+            mode: p.compressed.mode.name(),
+            tokens,
+            text: &p.compressed.text,
         })
         .collect();
     let mut meta = BundleMeta {
@@ -133,25 +150,20 @@ pub fn run(opts: Options, io: Io) -> anyhow::Result<Outcome> {
     if opts.report != ReportFormat::None {
         let report = Report {
             files: blocks
-                .iter()
-                .zip(&compressed)
-                .zip(&texts)
-                .zip(&read_bytes)
-                .zip(&redactions)
-                .map(
-                    |((((b, out), original), &original_bytes), &redactions)| FileStat {
-                        display: b.display.to_string(),
-                        lang: b.lang,
-                        requested_mode: opts.mode.name(),
-                        mode: b.mode,
-                        fallback: out.fallback,
-                        original_bytes,
-                        original_tokens: encoder.count(original),
-                        compressed_bytes: b.text.len() as u64,
-                        compressed_tokens: b.tokens,
-                        redactions,
-                    },
-                )
+                .par_iter()
+                .zip(&processed)
+                .map(|(b, p)| FileStat {
+                    display: b.display.to_string(),
+                    lang: b.lang,
+                    requested_mode: opts.mode.name(),
+                    mode: b.mode,
+                    fallback: p.compressed.fallback,
+                    original_bytes: p.read_bytes,
+                    original_tokens: encoder.count(&p.text),
+                    compressed_bytes: b.text.len() as u64,
+                    compressed_tokens: b.tokens,
+                    redactions: p.redactions,
+                })
                 .collect(),
             skipped: scan.skipped,
             bundle_tokens: meta.tokens,
