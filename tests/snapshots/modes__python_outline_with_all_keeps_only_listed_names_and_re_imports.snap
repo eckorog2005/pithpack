@@ -1,0 +1,13 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+"""Module docs."""
+from pkg import extra as shown
+
+VERSION = 1
+
+def _private():
+    return 2
+
+__all__ = ["_private", "VERSION", "shown"]
