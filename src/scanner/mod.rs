@@ -2,11 +2,13 @@ pub mod exclusion;
 mod sniff;
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use anyhow::Context;
-use ignore::WalkBuilder;
 use ignore::overrides::{Override, OverrideBuilder};
 use ignore::types::{Types, TypesBuilder};
+use ignore::{WalkBuilder, WalkState};
+use rayon::prelude::*;
 
 use crate::config::{Input, Options, display_path};
 
@@ -85,11 +87,18 @@ pub fn scan(opts: &Options) -> anyhow::Result<ScanResult> {
     found.dedup_by(|a, b| a.display == b.display);
 
     let exclusion = exclusion::Exclusion::with_extra(&opts.exclusion_extra)?;
-    let mut candidates = Vec::with_capacity(found.len());
-    for candidate in found {
-        match admit(&candidate, opts, &exclusion) {
-            Ok(()) => candidates.push(candidate),
-            Err(skip) => skipped.push((candidate.display, skip)),
+    let admitted: Vec<_> = found
+        .into_par_iter()
+        .map(|candidate| match admit(&candidate, opts, &exclusion) {
+            Ok(()) => Ok(candidate),
+            Err(skip) => Err((candidate.display, skip)),
+        })
+        .collect();
+    let mut candidates = Vec::with_capacity(admitted.len());
+    for item in admitted {
+        match item {
+            Ok(candidate) => candidates.push(candidate),
+            Err(skip) => skipped.push(skip),
         }
     }
     skipped.sort_by(|a, b| a.0.cmp(&b.0));
@@ -146,31 +155,70 @@ fn walk(
         .require_git(false)
         .add_custom_ignore_filename(".pithignore")
         .filter_entry(|e| e.file_name() != ".git")
-        .build();
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(err) => match (err.io_error(), error_path(&err)) {
+        .threads(rayon::current_num_threads())
+        .build_parallel();
+    let shared = Mutex::new((Vec::new(), Vec::new(), None));
+    walker.run(|| {
+        Box::new(|entry| {
+            let outcome = visit(entry, root, root_display);
+            let mut guard = shared.lock().unwrap();
+            let (found, unreadable, fatal) = &mut *guard;
+            match outcome {
+                Ok(Some(Ok(candidate))) => found.push(candidate),
+                Ok(Some(Err(skip))) => unreadable.push(skip),
+                Ok(None) => {}
+                Err(err) => {
+                    // Concurrent failures race; the smallest message keeps the reported error stable.
+                    if fatal
+                        .as_ref()
+                        .is_none_or(|old: &anyhow::Error| err.to_string() < old.to_string())
+                    {
+                        *fatal = Some(err);
+                    }
+                    return WalkState::Quit;
+                }
+            }
+            WalkState::Continue
+        })
+    });
+    let (found, unreadable, fatal) = shared.into_inner().unwrap();
+    if let Some(err) = fatal {
+        return Err(err);
+    }
+    out.extend(found);
+    skipped.extend(unreadable);
+    Ok(())
+}
+
+type Visited = Option<Result<Candidate, (String, Skip)>>;
+
+fn visit(
+    entry: Result<ignore::DirEntry, ignore::Error>,
+    root: &Path,
+    root_display: &str,
+) -> anyhow::Result<Visited> {
+    let entry = match entry {
+        Ok(entry) => entry,
+        Err(err) => {
+            return match (err.io_error(), error_path(&err)) {
                 (Some(io), Some(path)) => {
                     let skip = Skip::Unreadable(io.kind());
-                    skipped.push((join_display(root_display, root, path)?, skip));
-                    continue;
+                    Ok(Some(Err((join_display(root_display, root, path)?, skip))))
                 }
                 // A link back to an ancestor adds nothing the walk has not already seen.
-                _ if is_loop(&err) => continue,
-                _ => return Err(err.into()),
-            },
-        };
-        if !entry.file_type().is_some_and(|t| t.is_file()) {
-            continue;
+                _ if is_loop(&err) => Ok(None),
+                _ => Err(err.into()),
+            };
         }
-        out.push(Candidate {
-            display: join_display(root_display, root, entry.path())?,
-            path: entry.into_path(),
-            origin: Origin::Walked,
-        });
+    };
+    if !entry.file_type().is_some_and(|t| t.is_file()) {
+        return Ok(None);
     }
-    Ok(())
+    Ok(Some(Ok(Candidate {
+        display: join_display(root_display, root, entry.path())?,
+        path: entry.into_path(),
+        origin: Origin::Walked,
+    })))
 }
 
 fn include_types(extensions: &[String]) -> anyhow::Result<Types> {
