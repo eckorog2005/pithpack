@@ -11,7 +11,8 @@ use serde_json::Value;
 fn redaction_corpus() -> Vec<(&'static str, String, String)> {
     let token = |kind, parts: &[&str]| {
         let value = parts.concat();
-        (kind, format!("const T: &str = \"{value}\";\n"), value)
+        // `pub` so `outline` keeps the line instead of dropping it unredacted.
+        (kind, format!("pub const T: &str = \"{value}\";\n"), value)
     };
     vec![
         token("aws-access-key", &["AKIA", "Z7QK2M4XW9TB3HNP"]),

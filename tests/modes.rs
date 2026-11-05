@@ -279,15 +279,6 @@ fn rust_skeleton_with_no_docs_still_reparses() {
 }
 
 #[test]
-fn rust_outline_gets_skeleton_until_built() {
-    let out = compress(Some(Language::Rust), RUST, ModeArg::Outline, true);
-
-    assert_eq!(out.mode, ModeArg::Skeleton);
-    assert_eq!(out.fallback.map(|f| f.reason()), Some("mode_not_built"));
-    assert_reparses(Language::Rust, &out.text);
-}
-
-#[test]
 fn python_skeleton_collapses_bodies_keeping_docstrings_first() {
     let out = compress(Some(Language::Python), PYTHON, ModeArg::Skeleton, true);
 
@@ -434,4 +425,132 @@ fn html_and_css_fall_back_to_strip_with_a_strip_only_note() {
             "{table}"
         );
     }
+}
+
+const RUST_OUTLINE: &str = "\
+//! Crate docs survive.
+#![allow(dead_code)]
+
+use std::fmt;
+pub use std::io::Read;
+pub(crate) use std::io::Write;
+
+/// Public.
+#[derive(Debug)]
+pub struct Point {
+    pub x: i32,
+    /// Hidden field.
+    y: i32,
+    pub(crate) z: i32,
+}
+
+/// Hidden.
+#[derive(Debug)]
+struct Secret;
+
+pub(crate) fn crate_only() {}
+pub(super) fn super_only() {}
+pub(in crate::a) fn path_only() {}
+
+pub fn api() -> i32 {
+    let hidden = 1;
+    hidden + 2
+}
+
+impl Point {
+    pub fn x(&self) -> i32 {
+        let x = self.x;
+        x + 1
+    }
+
+    /// Hidden method.
+    #[inline]
+    fn private(&self) {}
+}
+
+impl Secret {
+    fn only_private() {}
+}
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, \"{}\", self.x)
+    }
+}
+
+pub trait Area {
+    fn area(&self) -> f64;
+}
+
+pub mod shapes {
+    pub const SIDES: u8 = 4;
+    const HIDDEN: u8 = 0;
+    pub(crate) mod inner {}
+}
+
+mod private_mod {
+    pub fn unreachable() {}
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {}
+}
+";
+
+#[test]
+fn rust_outline_keeps_only_pub_items_and_re_exports() {
+    let out = compress(Some(Language::Rust), RUST_OUTLINE, ModeArg::Outline, true);
+
+    assert_eq!(out.mode, ModeArg::Outline);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::Rust, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn rust_outline_with_no_docs_still_reparses() {
+    let out = compress(Some(Language::Rust), RUST_OUTLINE, ModeArg::Outline, false);
+
+    assert!(!out.text.contains("///"), "{}", out.text);
+    assert_reparses(Language::Rust, &out.text);
+}
+
+#[test]
+fn outline_for_the_other_languages_still_gets_skeleton_until_built() {
+    let out = compress(Some(Language::Go), "package a\n", ModeArg::Outline, true);
+
+    assert_eq!(out.mode, ModeArg::Skeleton);
+    assert_eq!(out.fallback.map(|f| f.reason()), Some("mode_not_built"));
+}
+
+#[test]
+fn the_file_tree_is_identical_across_modes() {
+    let dir = fixture(&[("lib.rs", RUST_OUTLINE), ("src/b.rs", "pub fn b() {}\n")]);
+
+    let trees: Vec<String> = ["-0", "-1", "-2"]
+        .map(|flag| {
+            let out = run(
+                dir.path(),
+                &[flag, "--report", "none", "lib.rs", "src/b.rs"],
+            )
+            .stdout;
+            out[..out.find("<file ").unwrap()]
+                .lines()
+                .filter(|l| !l.starts_with("<bundle"))
+                .collect()
+        })
+        .into();
+    assert!(trees[0].contains("lib.rs"), "{}", trees[0]);
+    assert_eq!(trees[0], trees[1]);
+    assert_eq!(trees[1], trees[2]);
+}
+
+#[test]
+fn rust_outline_drops_private_union_fields() {
+    let source = "pub union U {\n    pub a: u32,\n    b: f32,\n}\n";
+    let out = compress(Some(Language::Rust), source, ModeArg::Outline, true);
+
+    assert_eq!(out.text, "pub union U {\n    pub a: u32,\n}\n");
 }

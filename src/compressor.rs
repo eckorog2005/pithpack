@@ -191,9 +191,20 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
                 .iter()
                 .any(|body| body.start <= literal.start && literal.end <= body.end)
         });
-        // shortcut: outline isn't built, so it gets skeleton; drop once #45–#48 land.
-        let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
-        (ModeArg::Skeleton, fallback)
+        if mode == ModeArg::Outline && lang == Some(Language::Rust) {
+            for item in rust_private_items(tree.root_node(), source) {
+                let (range, glue) = removal(source, item.clone());
+                edits.retain(|(edit, _)| !(edit.start < range.end && range.start < edit.end));
+                edits.push((range, glue));
+                literals
+                    .retain(|literal| !(item.start <= literal.start && literal.end <= item.end));
+            }
+            (ModeArg::Outline, None)
+        } else {
+            // shortcut: outline isn't built for these, so it gets skeleton; drop once #46–#48 land.
+            let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
+            (ModeArg::Skeleton, fallback)
+        }
     } else {
         (ModeArg::Strip, Some(Fallback::StripOnly))
     };
@@ -202,6 +213,82 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
         mode,
         fallback,
     }
+}
+
+fn is_pub(item: Node, source: &str) -> bool {
+    let mut cursor = item.walk();
+    let vis = item
+        .children(&mut cursor)
+        .find(|child| child.kind() == "visibility_modifier");
+    vis.is_some_and(|vis| &source[vis.byte_range()] == "pub")
+}
+
+/// Trait bodies and trait impls keep their members: their visibility is inherited.
+fn rust_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
+    let mut dropped = Vec::new();
+    let mut scopes = vec![root];
+    while let Some(scope) = scopes.pop() {
+        let mut lead = None;
+        let mut cursor = scope.walk();
+        for child in scope.named_children(&mut cursor) {
+            let text = &source[child.byte_range()];
+            match child.kind() {
+                "line_comment" | "block_comment"
+                    if !text.starts_with("//!") && !text.starts_with("/*!") =>
+                {
+                    lead.get_or_insert(child.start_byte());
+                    continue;
+                }
+                "attribute_item" => {
+                    lead.get_or_insert(child.start_byte());
+                    continue;
+                }
+                "function_item"
+                | "struct_item"
+                | "enum_item"
+                | "union_item"
+                | "trait_item"
+                | "type_item"
+                | "const_item"
+                | "static_item"
+                | "mod_item"
+                | "use_declaration"
+                | "field_declaration"
+                | "extern_crate_declaration" => {
+                    let keep = is_pub(child, source);
+                    if keep {
+                        let body = match child.kind() {
+                            "mod_item" | "struct_item" | "union_item" => {
+                                child.child_by_field_name("body")
+                            }
+                            _ => None,
+                        };
+                        scopes.extend(body);
+                    } else {
+                        let comma = child.next_sibling().filter(|next| next.kind() == ",");
+                        let end = comma.map_or(child.end_byte(), |comma| comma.end_byte());
+                        dropped.push(lead.unwrap_or(child.start_byte())..end);
+                    }
+                }
+                "impl_item" if child.child_by_field_name("trait").is_none() => {
+                    let body = child.child_by_field_name("body");
+                    let mut cursor = child.walk();
+                    let has_pub = body.is_some_and(|body| {
+                        body.named_children(&mut cursor)
+                            .any(|member| is_pub(member, source))
+                    });
+                    if has_pub {
+                        scopes.extend(body);
+                    } else {
+                        dropped.push(lead.unwrap_or(child.start_byte())..child.end_byte());
+                    }
+                }
+                _ => {}
+            }
+            lead = None;
+        }
+    }
+    dropped
 }
 
 // shortcut: Python node kinds in the shared walk; move them to `@comment.doc` queries
