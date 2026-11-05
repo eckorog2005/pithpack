@@ -1,0 +1,33 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+package a
+
+// Version is public.
+const Version = 1
+
+const (
+	// Max is public.
+	Max = 10
+)
+
+// Thing is public.
+type Thing struct {
+	Name string
+	*Embedded
+}
+
+type Reader interface {
+	Read() error
+}
+
+type (
+	Pair  struct{ A, b int }
+)
+
+// New builds a Thing.
+func New() *Thing { /* … */ }
+
+// String is public.
+func (t *Thing) String() string { /* … */ }

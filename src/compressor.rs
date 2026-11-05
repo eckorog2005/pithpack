@@ -209,8 +209,17 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
                     .retain(|literal| !(item.start <= literal.start && literal.end <= item.end));
             }
             (ModeArg::Outline, None)
+        } else if mode == ModeArg::Outline && lang == Some(Language::Go) {
+            for item in go_private_items(tree.root_node(), source) {
+                let (range, glue) = removal(source, item.clone());
+                edits.retain(|(edit, _)| !(edit.start < range.end && range.start < edit.end));
+                edits.push((range, glue));
+                literals
+                    .retain(|literal| !(item.start <= literal.start && literal.end <= item.end));
+            }
+            (ModeArg::Outline, None)
         } else {
-            // shortcut: outline isn't built for these, so it gets skeleton; drop once #47–#48 land.
+            // shortcut: outline isn't built for these, so it gets skeleton; drop once #48 lands.
             let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
             (ModeArg::Skeleton, fallback)
         }
@@ -295,6 +304,94 @@ fn rust_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
                 _ => {}
             }
             lead = None;
+        }
+    }
+    dropped
+}
+
+fn go_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
+    let exported = |name: &str| name.chars().next().is_some_and(char::is_uppercase);
+    let named_exported = |node: Node| {
+        let mut cursor = node.walk();
+        let mut names = node.children_by_field_name("name", &mut cursor);
+        names.any(|name| exported(&source[name.byte_range()]))
+    };
+    let embedded_exported = |field: Node| {
+        let ty = field
+            .child_by_field_name("type")
+            .map_or("", |ty| &source[ty.byte_range()]);
+        exported(
+            ty.trim_start_matches('*')
+                .rsplit('.')
+                .next()
+                .unwrap_or_default(),
+        )
+    };
+    let with_doc = |node: Node| {
+        let mut start = node;
+        while let Some(prev) = start
+            .prev_sibling()
+            .filter(|prev| prev.kind() == "comment")
+            .filter(|prev| prev.end_position().row + 1 == start.start_position().row)
+        {
+            start = prev;
+        }
+        start.start_byte()..node.end_byte()
+    };
+    let mut dropped = Vec::new();
+    let mut cursor = root.walk();
+    for decl in root.named_children(&mut cursor) {
+        match decl.kind() {
+            "import_declaration" => dropped.push(with_doc(decl)),
+            "function_declaration" | "method_declaration" => {
+                if !named_exported(decl) {
+                    dropped.push(with_doc(decl));
+                }
+            }
+            "type_declaration" | "const_declaration" | "var_declaration" => {
+                let mut cursor = decl.walk();
+                let specs: Vec<Node> = decl
+                    .named_children(&mut cursor)
+                    .filter(|spec| spec.kind().ends_with("_spec") || spec.kind() == "type_alias")
+                    .collect();
+                let (kept, gone): (Vec<Node>, Vec<Node>) =
+                    specs.into_iter().partition(|spec| named_exported(*spec));
+                if kept.is_empty() {
+                    dropped.push(with_doc(decl));
+                    continue;
+                }
+                dropped.extend(gone.into_iter().map(with_doc));
+                for spec in kept.iter().filter(|spec| spec.kind() == "type_spec") {
+                    let Some(ty) = spec.child_by_field_name("type") else {
+                        continue;
+                    };
+                    let mut cursor = ty.walk();
+                    let mut members: Vec<Node> = ty.named_children(&mut cursor).collect();
+                    if ty.kind() == "struct_type" {
+                        members = members
+                            .into_iter()
+                            .flat_map(|list| {
+                                let mut cursor = list.walk();
+                                list.named_children(&mut cursor).collect::<Vec<_>>()
+                            })
+                            .collect();
+                    }
+                    for member in members {
+                        let private = match member.kind() {
+                            "field_declaration" if member.child_by_field_name("name").is_some() => {
+                                !named_exported(member)
+                            }
+                            "field_declaration" => !embedded_exported(member),
+                            "method_elem" => !named_exported(member),
+                            _ => false,
+                        };
+                        if private {
+                            dropped.push(with_doc(member));
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
     dropped

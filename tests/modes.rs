@@ -583,9 +583,89 @@ fn python_outline_with_no_docs_still_reparses() {
     assert_reparses(Language::Python, &out.text);
 }
 
+const GO_OUTLINE: &str = "\
+package a
+
+import (
+	\"fmt\"
+	\"os\"
+)
+
+// Version is public.
+const Version = 1
+
+const (
+	// Max is public.
+	Max = 10
+	min = 1
+)
+
+var cache = map[string]int{}
+
+// Thing is public.
+type Thing struct {
+	Name string
+	id   int
+	*Embedded
+}
+
+type hidden struct{ x int }
+
+type Reader interface {
+	Read() error
+	close()
+}
+
+type (
+	Pair  struct{ A, b int }
+	local int
+)
+
+// New builds a Thing.
+func New() *Thing {
+	fmt.Println(os.Args)
+	return &Thing{}
+}
+
+func helper() int {
+	return 1
+}
+
+// String is public.
+func (t *Thing) String() string {
+	return t.Name
+}
+
+func (t *Thing) reset() {
+	t.id = 0
+}
+";
+
+#[test]
+fn go_outline_keeps_exported_names_and_drops_imports() {
+    let out = compress(Some(Language::Go), GO_OUTLINE, ModeArg::Outline, true);
+
+    assert_eq!(out.mode, ModeArg::Outline);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::Go, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn go_outline_with_no_docs_still_reparses() {
+    let out = compress(Some(Language::Go), GO_OUTLINE, ModeArg::Outline, false);
+
+    assert_reparses(Language::Go, &out.text);
+}
+
 #[test]
 fn outline_for_the_other_languages_still_gets_skeleton_until_built() {
-    let out = compress(Some(Language::Go), "package a\n", ModeArg::Outline, true);
+    let out = compress(
+        Some(Language::TypeScript),
+        "export const a = 1;\n",
+        ModeArg::Outline,
+        true,
+    );
 
     assert_eq!(out.mode, ModeArg::Skeleton);
     assert_eq!(out.fallback.map(|f| f.reason()), Some("mode_not_built"));
