@@ -209,7 +209,9 @@ fn no_secret_reaches_the_bundle_or_report_for_any_flag_combination() {
 #[test]
 fn no_secret_reaches_the_bundle_or_report_in_any_language_mode_and_format() {
     let dir = fixture(&[]);
-    for ext in ["rs", "go", "py", "js", "jsx", "ts", "tsx", "html", "css", "txt"] {
+    for ext in [
+        "rs", "go", "py", "js", "jsx", "ts", "tsx", "html", "css", "txt",
+    ] {
         write(dir.path(), &format!("src/keys.{ext}"), &redaction_source());
     }
 
@@ -230,7 +232,8 @@ fn no_secret_reaches_the_bundle_or_report_in_any_language_mode_and_format() {
 fn no_secret_reaches_the_bundle_or_report_from_stdin() {
     let dir = fixture(&[]);
 
-    for base in [&[][..], &["-"], &["-", "--lang", "rust"]] {        for args in every_flag_combination(base) {
+    for base in [&[][..], &["-"], &["-", "--lang", "rust"]] {
+        for args in every_flag_combination(base) {
             let out = run_with_stdin(dir.path(), &args, &redaction_source());
 
             assert!(out.outcome.is_ok(), "{args:?}");
