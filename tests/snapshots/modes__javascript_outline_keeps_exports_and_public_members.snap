@@ -1,0 +1,17 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+export * from './x';
+
+/** Reads. */
+export function read(path) { … }
+
+export const answer = 42;
+
+export class Store {
+  count = 0;
+
+  add(item) { … }
+
+}

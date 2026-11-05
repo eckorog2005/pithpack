@@ -10,7 +10,6 @@ const MAX_ERROR_RATIO: f32 = 0.10;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Fallback {
-    ModeNotBuilt,
     StripOnly,
     ParseErrors { ratio: f32 },
     PlainText,
@@ -19,7 +18,6 @@ pub enum Fallback {
 impl Fallback {
     pub fn reason(&self) -> &'static str {
         match self {
-            Fallback::ModeNotBuilt => "mode_not_built",
             Fallback::StripOnly => "strip_only",
             Fallback::ParseErrors { .. } => "parse_errors",
             Fallback::PlainText => "plain_text",
@@ -28,7 +26,6 @@ impl Fallback {
 
     pub fn note(&self) -> &'static str {
         match self {
-            Fallback::ModeNotBuilt => "Mode not built for this language yet",
             Fallback::StripOnly => "strip is the only Mode for this language",
             Fallback::ParseErrors { .. } => "over 10% parse errors",
             Fallback::PlainText => "Plain Text: whitespace only",
@@ -195,6 +192,9 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
             Some(Language::Rust) => Some(rust_private_items as fn(Node, &str) -> Vec<Range<usize>>),
             Some(Language::Python) => Some(python_private_items as _),
             Some(Language::Go) => Some(go_private_items as _),
+            Some(Language::TypeScript | Language::Tsx | Language::JavaScript | Language::Jsx) => {
+                Some(ts_private_items as _)
+            }
             _ => None,
         }
         .filter(|_| mode == ModeArg::Outline);
@@ -208,9 +208,7 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
             }
             (ModeArg::Outline, None)
         } else {
-            // shortcut: outline isn't built for these, so it gets skeleton; drop once #48 lands.
-            let fallback = (mode == ModeArg::Outline).then_some(Fallback::ModeNotBuilt);
-            (ModeArg::Skeleton, fallback)
+            (ModeArg::Skeleton, None)
         }
     } else {
         (ModeArg::Strip, Some(Fallback::StripOnly))
@@ -298,6 +296,18 @@ fn rust_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
     dropped
 }
 
+fn with_doc(node: Node) -> Range<usize> {
+    let mut start = node;
+    while let Some(prev) = start
+        .prev_sibling()
+        .filter(|prev| prev.kind() == "comment")
+        .filter(|prev| prev.end_position().row + 1 == start.start_position().row)
+    {
+        start = prev;
+    }
+    start.start_byte()..node.end_byte()
+}
+
 fn go_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
     let exported = |name: &str| name.chars().next().is_some_and(char::is_uppercase);
     let named_exported = |node: Node| {
@@ -315,17 +325,6 @@ fn go_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
                 .next()
                 .unwrap_or_default(),
         )
-    };
-    let with_doc = |node: Node| {
-        let mut start = node;
-        while let Some(prev) = start
-            .prev_sibling()
-            .filter(|prev| prev.kind() == "comment")
-            .filter(|prev| prev.end_position().row + 1 == start.start_position().row)
-        {
-            start = prev;
-        }
-        start.start_byte()..node.end_byte()
     };
     let mut dropped = Vec::new();
     let mut cursor = root.walk();
@@ -381,6 +380,63 @@ fn go_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
                 }
             }
             _ => {}
+        }
+    }
+    dropped
+}
+
+fn ts_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
+    let is_private = |member: Node| {
+        let mut cursor = member.walk();
+        let private = member.children(&mut cursor).any(|child| {
+            child.kind() == "accessibility_modifier" && &source[child.byte_range()] == "private"
+        });
+        private
+            || ["name", "property"].iter().any(|field| {
+                member
+                    .child_by_field_name(field)
+                    .is_some_and(|name| name.kind() == "private_property_identifier")
+            })
+    };
+    let mut dropped = Vec::new();
+    let mut cursor = root.walk();
+    for stmt in root.named_children(&mut cursor) {
+        match stmt.kind() {
+            "comment" | "hash_bang_line" => {}
+            "export_statement" => {
+                let Some(class) = stmt
+                    .child_by_field_name("declaration")
+                    .filter(|decl| {
+                        matches!(
+                            decl.kind(),
+                            "class_declaration" | "abstract_class_declaration"
+                        )
+                    })
+                    .or_else(|| {
+                        stmt.child_by_field_name("value")
+                            .filter(|v| v.kind() == "class")
+                    })
+                else {
+                    continue;
+                };
+                let Some(body) = class.child_by_field_name("body") else {
+                    continue;
+                };
+                let mut cursor = body.walk();
+                dropped.extend(
+                    body.named_children(&mut cursor)
+                        .filter(|member| member.kind() != "comment" && is_private(*member))
+                        .map(|member| {
+                            let range = with_doc(member);
+                            // Fields end in a separate `;` token that would be left behind.
+                            match member.next_sibling().filter(|next| next.kind() == ";") {
+                                Some(semi) => range.start..semi.end_byte(),
+                                None => range,
+                            }
+                        }),
+                );
+            }
+            _ => dropped.push(with_doc(stmt)),
         }
     }
     dropped

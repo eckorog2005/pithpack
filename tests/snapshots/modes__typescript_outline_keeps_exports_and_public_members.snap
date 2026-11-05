@@ -1,0 +1,32 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+export { b } from './b';
+
+/** Public. */
+export interface Shape {
+  area(): number;
+}
+
+export type Pub = Local;
+
+/** Builds. */
+export function make(x: number): Shape { … }
+
+export class Box<T> {
+  /** Public field. */
+  value: T;
+  protected shared = 3;
+
+  constructor(value: T) { … }
+
+  get(): T { … }
+
+}
+
+export namespace Ns {
+  export const n = 1;
+}
+
+export default class {}

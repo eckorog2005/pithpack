@@ -658,17 +658,196 @@ fn go_outline_with_no_docs_still_reparses() {
     assert_reparses(Language::Go, &out.text);
 }
 
+const TS_OUTLINE: &str = "\
+import { a } from './a';
+export { b } from './b';
+
+/** Public. */
+export interface Shape {
+  area(): number;
+}
+
+interface Hidden {}
+
+type Local = number;
+
+export type Pub = Local;
+
+function helper(): number {
+  return 1;
+}
+
+/** Builds. */
+export function make(x: number): Shape {
+  return { area: () => x };
+}
+
+export class Box<T> {
+  /** Public field. */
+  value: T;
+  private secret = 1;
+  #hash = 2;
+  protected shared = 3;
+
+  constructor(value: T) {
+    this.value = value;
+  }
+
+  get(): T {
+    return this.value;
+  }
+
+  private reset(): void {
+    this.secret = 0;
+  }
+
+  #inner(): void {}
+}
+
+class Internal {}
+
+export namespace Ns {
+  export const n = 1;
+}
+
+export default class {}
+";
+
+const JS_OUTLINE: &str = "\
+import fs from 'fs';
+export * from './x';
+
+const cache = new Map();
+
+function helper() {
+  return cache;
+}
+
+/** Reads. */
+export function read(path) {
+  return fs.readFileSync(path);
+}
+
+export const answer = 42;
+
+export class Store {
+  #items = [];
+  count = 0;
+
+  add(item) {
+    this.#items.push(item);
+  }
+
+  #drain() {
+    return this.#items;
+  }
+}
+
+class Hidden {}
+";
+
+const TSX_OUTLINE: &str = "\
+import React from 'react';
+
+type Props = { name: string };
+
+const hidden = <div />;
+
+/** Greets. */
+export function Greeting({ name }: Props) {
+  return <p>{name}</p>;
+}
+
+export class View extends React.Component<Props> {
+  private tick = 0;
+
+  render() {
+    return <div>{this.props.name}</div>;
+  }
+}
+";
+
+const JSX_OUTLINE: &str = "\
+import React from 'react';
+
+const hidden = <div />;
+
+export function Greeting({ name }) {
+  return <p>{name}</p>;
+}
+
+export class View extends React.Component {
+  #tick = 0;
+
+  render() {
+    return <div>{this.props.name}</div>;
+  }
+}
+";
+
 #[test]
-fn outline_for_the_other_languages_still_gets_skeleton_until_built() {
+fn typescript_outline_keeps_exports_and_public_members() {
     let out = compress(
         Some(Language::TypeScript),
-        "export const a = 1;\n",
+        TS_OUTLINE,
         ModeArg::Outline,
         true,
     );
 
-    assert_eq!(out.mode, ModeArg::Skeleton);
-    assert_eq!(out.fallback.map(|f| f.reason()), Some("mode_not_built"));
+    assert_eq!(out.mode, ModeArg::Outline);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::TypeScript, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn tsx_outline_keeps_exports_and_public_members() {
+    let out = compress(Some(Language::Tsx), TSX_OUTLINE, ModeArg::Outline, true);
+
+    assert_eq!(out.mode, ModeArg::Outline);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::Tsx, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn javascript_outline_keeps_exports_and_public_members() {
+    let out = compress(
+        Some(Language::JavaScript),
+        JS_OUTLINE,
+        ModeArg::Outline,
+        true,
+    );
+
+    assert_eq!(out.mode, ModeArg::Outline);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::JavaScript, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn jsx_outline_keeps_exports_and_public_members() {
+    let out = compress(Some(Language::Jsx), JSX_OUTLINE, ModeArg::Outline, true);
+
+    assert_eq!(out.mode, ModeArg::Outline);
+    assert_eq!(out.fallback, None);
+    assert_reparses(Language::Jsx, &out.text);
+    insta::assert_snapshot!(out.text);
+}
+
+#[test]
+fn ts_family_outline_with_no_docs_still_reparses() {
+    for (lang, src) in [
+        (Language::TypeScript, TS_OUTLINE),
+        (Language::Tsx, TSX_OUTLINE),
+        (Language::JavaScript, JS_OUTLINE),
+        (Language::Jsx, JSX_OUTLINE),
+    ] {
+        assert_reparses(
+            lang,
+            &compress(Some(lang), src, ModeArg::Outline, false).text,
+        );
+    }
 }
 
 #[test]

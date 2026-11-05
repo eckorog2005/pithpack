@@ -1,0 +1,11 @@
+---
+source: tests/modes.rs
+expression: out.text
+---
+/** Greets. */
+export function Greeting({ name }: Props) { … }
+
+export class View extends React.Component<Props> {
+
+  render() { … }
+}
