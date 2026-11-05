@@ -275,3 +275,22 @@ fn init_refuses_to_overwrite_an_existing_config() {
         "tree = false\n"
     );
 }
+
+#[test]
+fn mode_and_docs_come_from_config_and_the_cli_overrides_them() {
+    use pithpack::cli::ModeArg;
+    let project = fixture(&[("pithpack.toml", "mode = \"outline\"\ndocs = false\n")]);
+
+    let opts = resolve_with(project.path(), None, &[]).unwrap();
+    assert_eq!(opts.mode, ModeArg::Outline);
+    assert!(!opts.docs);
+
+    let opts = resolve_with(project.path(), None, &["-0"]).unwrap();
+    assert_eq!(opts.mode, ModeArg::Strip);
+    let opts = resolve_with(project.path(), None, &["--mode", "skeleton"]).unwrap();
+    assert_eq!(opts.mode, ModeArg::Skeleton);
+
+    let docs_on = fixture(&[("pithpack.toml", "docs = true\n")]);
+    let opts = resolve_with(docs_on.path(), None, &["--no-docs"]).unwrap();
+    assert!(!opts.docs);
+}
