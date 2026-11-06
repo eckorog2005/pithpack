@@ -7,7 +7,7 @@ use crate::formatter::Format;
 use crate::parser::Language;
 use crate::report::ReportFormat;
 
-#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ModeArg {
     Strip,
     Skeleton,

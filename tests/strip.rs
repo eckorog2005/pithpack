@@ -161,10 +161,10 @@ fn stdin_is_compressed_only_when_its_language_is_given() {
 }
 
 #[test]
-fn css_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
+fn css_skeleton_and_outline_files_are_labelled_as_the_strip_they_get() {
     let dir = fixture(&[("main.css", "a { color: red } /* free */\n")]);
 
-    for flag in ["-1", "-2"] {
+    for (flag, requested) in [("-1", "skeleton"), ("-2", "outline")] {
         let out = run(dir.path(), &["--no-tree", flag, "main.css"]);
 
         assert!(
@@ -174,7 +174,8 @@ fn css_skeleton_and_outline_are_labelled_as_the_strip_they_get_until_built() {
             out.stdout
         );
         assert!(
-            out.stdout.contains(" mode=\"skeleton\" tokenizer="),
+            out.stdout
+                .contains(&format!(" mode=\"{requested}\" tokenizer=")),
             "{}",
             out.stdout
         );

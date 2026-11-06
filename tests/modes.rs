@@ -369,6 +369,25 @@ fn a_badly_broken_rust_file_falls_back_to_strip_in_skeleton() {
 }
 
 #[test]
+fn the_bundle_header_names_the_requested_mode() {
+    let dir = fixture(&[("lib.rs", "pub fn a() {\n    1\n}\n"), ("a.css", "a {}\n")]);
+
+    for (flag, mode) in [("-0", "strip"), ("-1", "skeleton"), ("-2", "outline")] {
+        let out = run(dir.path(), &[flag, "."]);
+
+        assert!(
+            out.stdout.contains(&format!(" mode=\"{mode}\" tokenizer=")),
+            "{}",
+            out.stdout
+        );
+    }
+
+    let out = run(dir.path(), &["-2", "-f", "markdown", "."]);
+
+    assert!(out.stdout.contains("- mode: outline\n"), "{}", out.stdout);
+}
+
+#[test]
 fn the_default_run_is_skeleton_and_labelled_so() {
     let dir = fixture(&[("lib.rs", "fn a() {\n    1\n}\n")]);
 

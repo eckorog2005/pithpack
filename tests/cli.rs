@@ -183,8 +183,7 @@ fn every_mode_flag_compresses_css_as_strip_and_is_labelled_so() {
             .code(0)
             .stdout(
                 predicate::str::contains("lang=\"css\" mode=\"strip\" tokens=\"")
-                    .and(predicate::str::contains("a long comment").not())
-                    .and(predicate::str::contains("mode=\"outline\"").not()),
+                    .and(predicate::str::contains("a long comment").not()),
             )
             .stderr(predicate::str::contains(" strip").and(predicate::str::contains("0.0%").not()));
     }
