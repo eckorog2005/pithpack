@@ -523,8 +523,8 @@ fn python_private_items(root: Node, source: &str) -> Vec<Range<usize>> {
         .collect()
 }
 
-// shortcut: Python node kinds in the shared walk; move them to `@comment.doc` queries
-// (SDD §8.2) once more grammars need them.
+// shortcut: Python node kinds in the shared walk; move them to tree-sitter queries once more
+// grammars need them.
 /// A Python docstring: the first statement of a module, class or function body when it is a bare
 /// string. `true` when it is the only statement of a class or function body.
 fn docstring<'a>(source: &str, body: Node<'a>) -> Option<(Node<'a>, bool)> {

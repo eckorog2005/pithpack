@@ -1,4 +1,4 @@
-//! The release-blocking secrets suite (SDD §7.2): no secret may reach the Bundle or the Report.
+//! The release-blocking secrets suite (DESIGN.md §7.2): no secret may reach the Bundle or the Report.
 
 mod common;
 
