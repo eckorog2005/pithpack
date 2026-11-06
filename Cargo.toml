@@ -10,6 +10,7 @@ homepage = "https://github.com/eckorog2005/pithpack"
 readme = "README.md"
 keywords = ["llm", "context", "tokens", "tree-sitter", "cli"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = ["demo/"]
 
 [dependencies]
 anyhow = "1.0.104"

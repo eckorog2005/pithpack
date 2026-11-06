@@ -4,6 +4,8 @@ Compress codebases into token-lean context bundles for LLMs.
 
 pithpack walks a set of paths, drops what must never leave your machine, compresses each Source File, and emits one Bundle plus a Report of how many tokens that saved.
 
+![Terminal demo: pithpack compresses a small Python file in skeleton and outline Modes, redacting its API key and reporting the tokens saved](demo/demo.gif)
+
 ## Install
 
 No release has been published yet, so build from the repository (needs Rust 1.90 or newer):
