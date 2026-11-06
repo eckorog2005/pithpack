@@ -114,7 +114,7 @@ bench/run.sh
 ## Design docs
 
 - [`GLOSSARY.md`](GLOSSARY.md) defines the vocabulary used here.
-- [`docs/SDD.md`](docs/SDD.md) is the full design, including the CLI and configuration reference.
+- [`docs/DESIGN.md`](docs/DESIGN.md) is the full design, including the CLI and configuration reference.
 - [`docs/adr/`](docs/adr/) records the architecture decisions.
 
 ## License

@@ -1,4 +1,4 @@
-//! Writes the SDD 9.1 reference workload: `cargo run --release --example gen_fixture -- <out-dir>`.
+//! Writes the DESIGN.md §9.1 reference workload: `cargo run --release --example gen_fixture -- <out-dir>`.
 use std::fs;
 use std::io;
 use std::path::Path;
