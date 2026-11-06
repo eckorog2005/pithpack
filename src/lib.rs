@@ -143,7 +143,10 @@ pub fn run(opts: Options, io: Io) -> anyhow::Result<Outcome> {
         tree: opts.tree,
     };
     // The total sits inside the text it counts; the re-render's digits may shift it by ±2.
-    meta.tokens = encoder.count(&formatter::render(&meta, &blocks));
+    meta.tokens = encoder.count_with_known(
+        &formatter::render(&meta, &blocks),
+        blocks.iter().map(|b| (b.text, b.tokens)),
+    );
     let bundle = formatter::render(&meta, &blocks);
     sink::write(&opts.sink, &bundle, io.stdout)?;
 
