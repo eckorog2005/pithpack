@@ -51,6 +51,9 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
     let mut literals = Vec::new();
     let mut bodies = Vec::new();
     let mut error_bytes = 0;
+    // Without errors no fallback can restore what is inside an elided body, so it needn't be walked.
+    let can_skip_bodies = mode != ModeArg::Strip && !tree.root_node().has_error();
+    let mut cursor = tree.walk();
     let mut stack = vec![(tree.root_node(), false)];
     while let Some((node, in_error)) = stack.pop() {
         if matches!(node.kind(), "line_comment" | "block_comment" | "comment") {
@@ -110,35 +113,39 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
             literals.push(node.byte_range());
             continue;
         }
-        let body = node
-            .child_by_field_name("body")
-            .filter(|_| {
-                matches!(
-                    node.kind(),
-                    "function_item"
-                        | "function_definition"
-                        | "function_declaration"
-                        | "method_declaration"
-                        | "generator_function_declaration"
-                        | "function_expression"
-                        | "generator_function"
-                        | "arrow_function"
-                        | "method_definition"
-                )
-            })
-            // `x => ({ … })` is an expression; swapping it for a block would change what it returns.
-            .filter(|body| node.kind() != "arrow_function" || body.kind() == "statement_block")
-            .and_then(|body| {
-                // A kept Python docstring stays as the first line of the collapsed body.
-                let start = match docstring(source, body).filter(|_| docs) {
-                    Some((doc, _)) => doc.next_named_sibling()?,
-                    None => body,
-                };
-                (start.start_position().row != body.end_position().row)
-                    .then(|| start.start_byte()..body.end_byte())
-            });
+        let body_node = matches!(
+            node.kind(),
+            "function_item"
+                | "function_definition"
+                | "function_declaration"
+                | "method_declaration"
+                | "generator_function_declaration"
+                | "function_expression"
+                | "generator_function"
+                | "arrow_function"
+                | "method_definition"
+        )
+        .then(|| node.child_by_field_name("body"))
+        .flatten()
+        // `x => ({ … })` is an expression; swapping it for a block would change what it returns.
+        .filter(|body| node.kind() != "arrow_function" || body.kind() == "statement_block");
+        let body_range = body_node.and_then(|body| {
+            // A kept Python docstring stays as the first line of the collapsed body.
+            let start = match docstring(source, body).filter(|_| docs) {
+                Some((doc, _)) => doc.next_named_sibling()?,
+                None => body,
+            };
+            (start.start_position().row != body.end_position().row)
+                .then(|| start.start_byte()..body.end_byte())
+        });
+        let skipped_body = body_node.filter(|body| {
+            can_skip_bodies
+                && body_range
+                    .as_ref()
+                    .is_some_and(|r| r.start == body.start_byte())
+        });
         // A nested fn's body overlaps its parent's, and `apply` keeps only the outer edit.
-        bodies.extend(body);
+        bodies.extend(body_range);
         if node.is_error() && !in_error {
             error_bytes += node.byte_range().len();
         }
@@ -155,10 +162,11 @@ pub fn compress(lang: Option<Language>, source: &str, mode: ModeArg, docs: bool)
                 removal(source, range)
             });
         }
-        let mut cursor = node.walk();
         stack.extend(
             node.children(&mut cursor)
-                .filter(|child| Some(*child) != dropped.map(|(doc, _)| doc))
+                .filter(|child| {
+                    Some(*child) != dropped.map(|(doc, _)| doc) && Some(*child) != skipped_body
+                })
                 .map(|child| (child, in_error || node.is_error())),
         );
     }

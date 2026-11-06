@@ -470,6 +470,7 @@ pub struct Encoder { /* &'static CoreBPE */ }
 impl Encoder {
     pub fn get(kind: TokenizerKind) -> &'static Encoder;   // OnceLock per kind
     pub fn count(&self, text: &str) -> usize;              // encode_ordinary: special tokens are text
+    pub fn count_with_known<'a>(&self, whole: &str, known: impl IntoIterator<Item = (&'a str, usize)>) -> usize; // count(whole), reusing (substring, count) pairs
     pub fn name(&self) -> &'static str;                    // "o200k_base"
 }
 ```
@@ -591,6 +592,8 @@ Reference workload: `benches/gen_fixture.rs` deterministically generates 1,000 S
 - Parallel walk (`ignore` parallel walker) and per-file work on rayon.
 - Encoder BPE initialisation runs on a background thread while the walk is in progress (this is the biggest single fixed cost, measured in tens of milliseconds).
 - Queries compiled once per language (`LazyLock`); parsers reused per thread.
+- `Encoder::count` splits large text at newlines no tokenizer piece can span and counts the parts in parallel; the Bundle total reuses per-file counts through `count_with_known`.
+- In `skeleton` and `outline`, the compressor does not walk an elided function body when the tree has no errors.
 - `redact` returns `Cow::Borrowed` when nothing matches; `RegexSet` pre-filter avoids running individual rules on clean files.
 - Files read with a single `read_to_end`; no mmap (more complexity than it is worth below 1 MiB).
 - Release profile: `lto = "thin"`, `codegen-units = 1`.

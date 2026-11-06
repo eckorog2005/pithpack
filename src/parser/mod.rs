@@ -1,5 +1,7 @@
 mod language;
 
+use std::cell::RefCell;
+
 pub use language::{Language, detect, lang_name};
 
 /// `None` if tree-sitter gives up; the file is then treated as Plain Text.
@@ -14,10 +16,13 @@ pub fn parse(lang: Language, source: &str) -> Option<tree_sitter::Tree> {
         Language::Html => tree_sitter_html::LANGUAGE.into(),
         Language::Css => tree_sitter_css::LANGUAGE.into(),
     };
-    // shortcut: a fresh Parser per file; keep one per thread when #54 parallelises.
-    let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&grammar)
-        .expect("the bundled grammar matches the tree-sitter ABI");
-    parser.parse(source, None)
+    thread_local! {
+        static PARSER: RefCell<tree_sitter::Parser> = RefCell::new(tree_sitter::Parser::new());
+    }
+    PARSER.with_borrow_mut(|parser| {
+        parser
+            .set_language(&grammar)
+            .expect("the bundled grammar matches the tree-sitter ABI");
+        parser.parse(source, None)
+    })
 }
