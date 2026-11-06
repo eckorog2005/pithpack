@@ -157,10 +157,16 @@ The brief placed secret scrubbing in `scanner`. It is split into `redact` becaus
 │   ├── cli.rs                    # assert_cmd end-to-end
 │   ├── modes.rs                  # insta snapshots per language × Mode
 │   ├── secrets.rs                # Exclusion/Redaction cannot leak
+│   ├── gen_fixture.rs            # reference workload is deterministic
 │   └── fixtures/<lang>/…
-└── benches/
-    ├── gen_fixture.rs            # deterministic 1,000-file workload
-    └── run.sh                    # hyperfine driver
+├── benches/
+│   └── gen_fixture.rs            # deterministic 1,000-file workload: cargo run --example gen_fixture
+├── bench/
+│   └── run.sh                    # hyperfine driver, also run by bench.yml
+└── demo/
+    ├── demo.tape                 # vhs script: vhs demo/demo.tape
+    ├── demo.gif                  # rendered recording, embedded in the README
+    └── sample/cart.py            # Source File recorded by the tape
 ```
 
 ## 5. CLI specification
@@ -636,7 +642,7 @@ Each phase is a series of PRs that leave `main` releasable and is done only when
 | **3: `strip`** | `parser` for all 7 grammars, Doc/Free Comment queries, `compressor::strip`, whitespace normalisation, parse-error fallback | snapshot suite for every language in `strip` |
 | **4: `skeleton`** | body queries + placeholders for Rust, Python, TS/JS, Go; StripOnly fallback for HTML/CSS | snapshots plus the re-parse check for every Full language |
 | **5: `outline`** | `public.rs` per language, import/re-export handling | snapshots plus the re-parse check; File Tree unchanged across Modes |
-| **6: Performance and polish** | fixture generator, `bench.yml`, profiling to hit 400 ms, README with demo GIF (recorded with `vhs`) | reference benchmark < 400 ms; README published |
+| **6: Performance and polish** (done) | fixture generator (`benches/gen_fixture.rs`), `bench/run.sh`, non-gating `bench.yml`, parallel walk and per-file work, profiling to hit 400 ms, README with demo GIF (`demo/`, recorded with `vhs`) | reference benchmark < 400 ms; README published |
 
 Two deliberate changes from the original brief: Redaction moves from Phase 3 to Phase 2, because Phase 2 is the first release and a release that can paste secrets into a chat window breaks the zero-leaks requirement; and `outline` gets its own phase, since the brief's phases never scheduled it.
 
