@@ -23,9 +23,6 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/eckorog2005/pithpack/re
 # Windows (PowerShell)
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/eckorog2005/pithpack/releases/latest/download/pithpack-installer.ps1 | iex"
 
-# Homebrew
-brew install eckorog2005/tap/pithpack
-
 # crates.io
 cargo install pithpack
 ```

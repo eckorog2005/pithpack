@@ -369,7 +369,7 @@ The clipboard is tested behind a `PITHPACK_CLIPBOARD=file:<path>` test hook so C
 - **Ruleset on `main`**: PR required (0 approvals while there is a single maintainer; raise to 1 when a second joins), conversations resolved, required status check `ci-ok` with branch up to date, linear history, no force pushes, no deletion, no bypass actors.
 - **CI (`ci.yml`)**: `fmt`, `clippy -D warnings`, `test` (ubuntu, macOS arm64, Windows, via `cargo nextest`) plus doctests, `msrv` (Rust 1.90), `deny` (`cargo-deny`), `pr-title` (semantic PR title). `ci-ok` aggregates them and is the only required check, so jobs can change without editing the ruleset.
 - **Supply chain**: every action pinned to a full commit SHA; Dependabot weekly for `cargo` and `github-actions`, minor and patch updates grouped.
-- **Releases**: `cargo-dist` generates `release.yml`. Targets: `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc`. Installers: shell, PowerShell, Homebrew tap; `cargo install pithpack`.
+- **Releases**: `cargo-dist` generates `release.yml`. Targets: `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-pc-windows-msvc`. Installers: shell, PowerShell; `cargo install pithpack`. A Homebrew tap is deferred.
 
 ## 13. Future work
 
